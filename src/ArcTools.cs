@@ -177,6 +177,10 @@ namespace Hwbt
                     var nh = TexHeader.Read(tex, 0);
                     if (nh.Width != oh.Width || nh.Height != oh.Height || nh.Format != oh.Format)
                         Archive.Log(string.Format("  i {0} atlas: {1}x{2} {3} -> {4}x{5} {6}", name, oh.Width, oh.Height, oh.FormatName, nh.Width, nh.Height, nh.FormatName));
+                    // tested in-game: a 1.5x atlas works, a 2x atlas crashes the game
+                    if (nh.Width > oh.Width * 1.5 || nh.Height > oh.Height * 1.5)
+                        Archive.Log(string.Format("  ! {0} atlas is more than 1.5x the original ({1}x{2} -> {3}x{4}): a 2x font atlas crashed the game in testing, 1.5x works.",
+                            name, oh.Width, oh.Height, nh.Width, nh.Height));
                 }
                 string txt = Path.Combine(fd, "font.txt");
                 GameFont font;

@@ -131,6 +131,8 @@ Copy the folder to `mods\YourMod\A_MAINMENU_FONTSARCHIVE.ARC\mainmenu.font\`, ed
 * Without `font.txt`, only the atlas is replaced.
 * Without the atlas, only the metrics change.
 * If you upscale the atlas but keep the layout, leave `atlassize` as it is and the coordinates are scaled for you.
+* ⚠️ **Keep the atlas at most 1.5× the original size.** Tested in-game: 1.5× works, **2× crashes the game**.
+  The toolkit warns about larger atlases.
 * A `<name>.font\` folder placed directly in the mod (not inside a `<BANK.ARC>\` folder) is applied to **every
   bank that has a font with that name**. For example, `mods\MyFont\mainmenu.font\` changes all 14 copies of `mainmenu`.
 

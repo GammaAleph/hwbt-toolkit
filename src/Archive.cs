@@ -269,7 +269,8 @@ namespace Hwbt
                 var excluded = rootEntry.Value;
                 Func<string, bool> keep = p => !excluded.Any(x => (Path.GetFullPath(p).TrimEnd('\\') + "\\").StartsWith(x, StringComparison.OrdinalIgnoreCase));
                 string root = Path.GetFullPath(modDir).TrimEnd('\\') + "\\";
-                bool hasOwnContent = Directory.GetFiles(modDir, "*", SearchOption.AllDirectories).Any(keep);
+                // real content = anything but notes (README.txt etc.); a mod that only has Data / lData parts has no shared part to warn about
+                bool hasOwnContent = Directory.GetFiles(modDir, "*", SearchOption.AllDirectories).Where(keep).Any(x => !IsNoteFile(x));
                 int unchanged = 0; // files identical to the original game data (skipped)
                 foreach (var f in Directory.GetFiles(modDir, "*", SearchOption.AllDirectories).Where(keep))
                 {
@@ -417,13 +418,21 @@ namespace Hwbt
                 if (unchanged > 0) recognised = true;
                 if (result.Count == itemsBefore && !recognised && hasOwnContent)
                 {
-                    Log("  ! " + Path.GetFileName(modDir.TrimEnd('\\')) + ": nothing in this mod matches the game files. Expected for example:");
-                    Log("      <mod>\\TITLE.OGG   <mod>\\TEXT0000.txt   <mod>\\<BANK>.ARC\\<texture>.png");
-                    Log("      <mod>\\<BANK>.ARC\\<font>.font\\font.txt   <mod>\\<font>.font\\ (all banks)   <mod>\\<BANK>.HDR\\<sound>.wav");
+                    Log("  ! " + Path.GetFileName(modDir.TrimEnd('\\')) + ": nothing here matches the game files. Expected layout (see mods\\_template):");
+                    Log("      <mod>\\Data\\arc\\<BANK>.ARC\\textures\\<name>.png   <mod>\\Data\\arc\\<BANK>.ARC\\fonts\\<name>.font\\");
+                    Log("      <mod>\\Data\\texts\\TEXT0000.txt   <mod>\\Data\\sounds\\<BANK>\\<name>.wav   <mod>\\Data\\music\\TITLE.OGG   (lData\\ the same)");
                 }
             }
             foreach (var m in result.Values.OrderBy(x => x.Source)) Log("  + " + m.Source);
             return result;
+        }
+
+        // README / notes that people (and the template) keep in mod folders - never game content.
+        static bool IsNoteFile(string path)
+        {
+            string n = Path.GetFileName(path);
+            return n.StartsWith("readme", StringComparison.OrdinalIgnoreCase) || n.EndsWith(".md", StringComparison.OrdinalIgnoreCase)
+                || (n.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) && !n.StartsWith("TEXT", StringComparison.OrdinalIgnoreCase));
         }
 
         // True when the mod file has exactly the original content of that archive entry.
