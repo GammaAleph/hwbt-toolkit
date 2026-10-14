@@ -1,0 +1,122 @@
+// GUI localisation: English / Russian. The choice is stored in %APPDATA%\HWBT-Toolkit\settings.ini.
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+
+namespace Hwbt
+{
+    public static class Lang
+    {
+        public static readonly string[] Names = { "English", "Русский" };
+        public static int Current; // 0 = English, 1 = Russian
+
+        static readonly Dictionary<string, string[]> S = new Dictionary<string, string[]>
+        {
+            { "admin", new[] { " [Administrator]", " [Администратор]" } },
+            { "language", new[] { "Language:", "Язык:" } },
+            { "gameDir", new[] { "Game folder:", "Папка игры:" } },
+            { "modsDir", new[] { "Mods folder:", "Папка модов:" } },
+            { "modsGroup", new[] { "Mods (each sub-folder is a mod; checked mods are installed, lower ones win)",
+                                   "Моды (каждая подпапка = мод; отмеченные будут установлены, нижние в списке приоритетнее)" } },
+            { "btnInstall", new[] { "Install mods", "Установить моды" } },
+            { "btnRestore", new[] { "Restore original", "Вернуть оригинал" } },
+            { "btnRefresh", new[] { "Refresh list", "Обновить список" } },
+            { "btnOpenMods", new[] { "Open mods folder", "Открыть папку модов" } },
+            { "btnUnpack", new[] { "Unpack archive…", "Распаковать архив…" } },
+            { "btnTex", new[] { "Textures ARC → PNG/DDS…", "Текстуры ARC → PNG/DDS…" } },
+            { "btnLda", new[] { "Texts LDA → TXT…", "Тексты LDA → TXT…" } },
+            { "communityGroup", new[] { "Community patches by Kyubikkumasuta - V1: music fixes; V2: V1 + track order, look-behind camera, full controller support",
+                                        "Патчи сообщества от Kyubikkumasuta - V1: исправление музыки; V2: V1 + порядок треков, камера назад, поддержка геймпада" } },
+            { "btnCpInstallV1", new[] { "Install Patch V1", "Установить патч V1" } },
+            { "btnCpInstallV2", new[] { "Install Patch V2", "Установить патч V2" } },
+            { "btnCpRestore", new[] { "Remove patch", "Удалить патч" } },
+            { "btnCpSite", new[] { "Official website", "Официальный сайт" } },
+            { "cpInstalledV1", new[] { "Status: Patch V1 installed", "Статус: установлен патч V1" } },
+            { "cpInstalledV2", new[] { "Status: Patch V2 installed", "Статус: установлен патч V2" } },
+            { "cpNotInstalled", new[] { "Status: not installed", "Статус: не установлен" } },
+            { "cpUnknown", new[] { "Status: unknown (game folder not found)", "Статус: неизвестен (папка игры не найдена)" } },
+            { "credits", new[] { "Archive format research: Technyx by Lukas Cone (PredatorCZ)  ·  Community Patches V1/V2: Kyubikkumasuta (Beat That! Revival)  ·  Please support the original authors!",
+                                 "Формат архивов: Technyx от Lukas Cone (PredatorCZ)  ·  Патчи сообщества V1/V2: Kyubikkumasuta (Beat That! Revival)  ·  Поддержите оригинальных авторов!" } },
+            { "supportLink", new[] { "Please support the original authors!", "Поддержите оригинальных авторов!" } },
+            { "cpV2HasV1", new[] { "Note: Patch V2 already contains all Patch V1 fixes - installing V2 alone is enough.",
+                                   "Примечание: патч V2 уже содержит все исправления V1 - достаточно установить только V2." } },
+            { "gameFound", new[] { "Game: found", "Игра: найдена" } },
+            { "gameNotFound", new[] { "Game: NOT found - select the game folder", "Игра: НЕ найдена - укажите папку игры" } },
+            { "done", new[] { "Done.", "Готово." } },
+            { "error", new[] { "ERROR: ", "ОШИБКА: " } },
+            { "noAccess", new[] { "ERROR: access denied ", "ОШИБКА: нет доступа " } },
+            { "noModsChecked", new[] { "No mods checked - restoring the original archives.", "Ни один мод не отмечен - возвращаю оригинальные архивы." } },
+            { "askUnpackDir", new[] { "Where to unpack? (Data and lData sub-folders will be created)", "Куда распаковать архив? (будут созданы подпапки Data и lData)" } },
+            { "pickArc", new[] { "Select .ARC files (from the unpacked archive)", "Выберите .ARC файлы (из распакованного архива)" } },
+            { "askTexDir", new[] { "Where to save textures (PNG + DDS)?", "Куда сохранить текстуры (PNG + DDS)?" } },
+            { "texCount", new[] { "{0}: {1} textures", "{0}: {1} текстур" } },
+            { "texHint1", new[] { "To put textures into the game: in your mod folder create a folder named like the bank (e.g. CAR_LOD0_GRA.ARC)",
+                                  "Чтобы вставить текстуры в игру: создайте в папке мода папку с именем банка (например CAR_LOD0_GRA.ARC)" } },
+            { "texHint2", new[] { "and put ONLY the edited .png or .dds files there (keep the file names).",
+                                  "и положите туда ТОЛЬКО изменённые .png или .dds (имена файлов не менять)." } },
+            { "ldaFilter", new[] { "Texts (*.LDA)|*.LDA", "Тексты (*.LDA)|*.LDA" } },
+            { "ldaHint", new[] { "Put the edited TEXTxxxx.txt into a mod folder - it is compiled during installation.",
+                                 "Положите изменённый TEXTxxxx.txt в папку мода - он будет скомпилирован при установке." } },
+            { "gameDirBad", new[] { "Data\\CDFILES.DAT not found in the game folder: ", "В папке игры не найден Data\\CDFILES.DAT: " } },
+            { "gameRunning", new[] { "The game (HOT.exe) is running - close it first.", "Игра запущена (HOT.exe) - закройте её." } },
+            { "elevateTitle", new[] { "Access denied", "Нет доступа" } },
+            { "elevateText", new[] { "Administrator rights are required to write into the game folder (Program Files).\nRestart the program as administrator?",
+                                     "Для записи в папку игры (Program Files) нужны права администратора.\nПерезапустить программу от имени администратора?" } },
+            { "elevateFail", new[] { "Could not restart: ", "Не удалось перезапуститься: " } },
+            { "cpTitle", new[] { "Community patch", "Патч сообщества" } },
+            { "cpAskDownload", new[] {
+                "Community {0} by Kyubikkumasuta is not downloaded yet.\n\nDownload it now from the author's official link (Google Drive)?\n{1}",
+                "{0} сообщества от Kyubikkumasuta ещё не скачан.\n\nСкачать его сейчас по официальной ссылке автора (Google Drive)?\n{1}" } },
+            { "cpDownloading", new[] { "Downloading community {0}…", "Скачиваю {0}…" } },
+            { "cpDownloaded", new[] { "Downloaded and verified: ", "Скачан и проверен: " } },
+            { "cpHashMismatch", new[] {
+                "The downloaded file differs from the version verified by HWBT Toolkit (the author may have published an update).\n\nSHA-256: {0}\n\nUse it anyway?",
+                "Скачанный файл отличается от версии, проверенной HWBT Toolkit (возможно, автор выпустил обновление).\n\nSHA-256: {0}\n\nВсё равно использовать?" } },
+            { "cpAskInstall", new[] {
+                "Install community {0}?\n\nThe patch files will be copied to\n{1}\nand the author's installer will run in a console window (it backs up HOT.exe first).\nThe game must be closed.",
+                "Установить {0} сообщества?\n\nФайлы патча будут скопированы в\n{1}\nи запустится установщик автора в окне консоли (он сначала делает копию HOT.exe).\nИгра должна быть закрыта." } },
+            { "cpAskRestore", new[] { "Remove community {0} and restore HOT.exe from the author's backup?", "Удалить {0} сообщества и восстановить HOT.exe из резервной копии автора?" } },
+            { "Patch V1", new[] { "Patch V1", "Патч V1" } },
+            { "Patch V2", new[] { "Patch V2", "Патч V2" } },
+            { "cpNothing", new[] { "No community patch is installed.", "Патч сообщества не установлен." } },
+            { "cpRunning", new[] { "Running the patch script (see the console window)…", "Запущен скрипт патча (см. окно консоли)…" } },
+            { "cpExit", new[] { "Patch script finished, exit code {0}.", "Скрипт патча завершён, код {0}." } },
+            { "cpNoRestore", new[] { "{0} not found in Bin - cannot remove.", "В Bin нет {0} - удалить невозможно." } },
+        };
+
+        public static string T(string key)
+        {
+            string[] v;
+            return S.TryGetValue(key, out v) ? v[Current] : key;
+        }
+
+        public static string F(string key, params object[] args) { return string.Format(T(key), args); }
+
+        static string SettingsFile
+        {
+            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HWBT-Toolkit", "settings.ini"); }
+        }
+
+        public static void Load()
+        {
+            Current = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ru" ? 1 : 0;
+            try
+            {
+                foreach (var line in File.ReadAllLines(SettingsFile))
+                    if (line.StartsWith("lang=")) Current = line.Substring(5).Trim() == "ru" ? 1 : 0;
+            }
+            catch { }
+        }
+
+        public static void Save()
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile));
+                File.WriteAllText(SettingsFile, "lang=" + (Current == 1 ? "ru" : "en") + "\r\n");
+            }
+            catch { }
+        }
+    }
+}

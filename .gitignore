@@ -1,0 +1,11 @@
+# build output (published in GitHub Releases)
+hwbt.exe
+*.pdb
+
+# community patch is downloaded at runtime from the author's official link, not redistributed
+community/*
+!community/README.txt
+
+# mods may contain game assets - only the empty example is tracked
+mods/*
+!mods/_example/
