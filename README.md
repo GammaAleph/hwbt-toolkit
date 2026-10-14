@@ -37,7 +37,7 @@ This toolkit stands on the work of other people. If you enjoy it, please support
 
 ## Install
 
-1. Download `HWBT-Toolkit-v1.2.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
+1. Download `HWBT-Toolkit-v1.2.1.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
    and unzip it anywhere.
 2. Run `hwbt.exe`. The language selector is at the top of the window.
 
@@ -97,6 +97,8 @@ Copy the folder to `mods\YourMod\A_MAINMENU_FONTSARCHIVE.ARC\mainmenu.font\`, ed
 * Without `font.txt`, only the atlas is replaced.
 * Without the atlas, only the metrics change.
 * If you upscale the atlas but keep the layout, leave `atlassize` as it is and the coordinates are scaled for you.
+* A `<name>.font\` folder placed directly in the mod (not inside a `<BANK.ARC>\` folder) is applied to **every
+  bank that has a font with that name**. For example, `mods\MyFont\mainmenu.font\` changes all 14 copies of `mainmenu`.
 
 Character codes are the bytes of the 8-bit text tables, so new glyphs can use free codes 0x80–0xFF.
 

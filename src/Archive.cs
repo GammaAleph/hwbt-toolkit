@@ -256,7 +256,7 @@ namespace Hwbt
 
                     if (parent.EndsWith(".ARC", StringComparison.OrdinalIgnoreCase) && ArcTools.IsImage(fname))
                         continue; // handled per folder below
-                    if (parent.EndsWith(".font", StringComparison.OrdinalIgnoreCase))
+                    if (ArcTools.IsFontDir(Path.GetDirectoryName(f)))
                         continue; // font folders (font.txt + atlas) inside NAME.ARC\, handled below
                     if ((parent.EndsWith(".HDR", StringComparison.OrdinalIgnoreCase) || parent.EndsWith(".SPD", StringComparison.OrdinalIgnoreCase)) &&
                         (fname.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) || fname.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase)))
@@ -282,12 +282,23 @@ namespace Hwbt
                     Log("  ! skipped (no such file in archive): " + rel);
                 }
 
-                foreach (var d in Directory.GetDirectories(modDir, "*.ARC", SearchOption.AllDirectories))
+                int itemsBefore = result.Count;
+                Func<string, string> relOf = p =>
+                {
+                    string full = Path.GetFullPath(p).TrimEnd('\\') + "\\";
+                    return full.Length > root.Length ? full.Substring(root.Length).TrimEnd('\\') : Path.GetFileName(modDir.TrimEnd('\\'));
+                };
+                // the mod folder itself may be a bank folder (e.g. mods\A_MAINMENU_FONTSARCHIVE.ARC\)
+                Func<string, IEnumerable<string>> dirsNamed = ext =>
+                    Directory.GetDirectories(modDir, "*" + ext, SearchOption.AllDirectories)
+                        .Concat(modDir.TrimEnd('\\').EndsWith(ext, StringComparison.OrdinalIgnoreCase) ? new[] { modDir } : new string[0]);
+
+                foreach (var d in dirsNamed(".ARC"))
                 {
                     CdEntry e;
-                    if (!byName.TryGetValue(Path.GetFileName(d), out e))
+                    if (!byName.TryGetValue(Path.GetFileName(d.TrimEnd('\\')), out e))
                     {
-                        Log("  ! skipped folder (no such bank in archive): " + d.Substring(root.Length));
+                        Log("  ! skipped folder (no such bank in archive): " + relOf(d));
                         continue;
                     }
                     bool hasImages = Directory.GetFiles(d).Any(ArcTools.IsImage);
@@ -301,26 +312,31 @@ namespace Hwbt
                     if (hasImages)
                     {
                         arc = ArcTools.ImportTextures(arc, d, out n);
-                        Log(string.Format("  {0}: {1} texture(s) injected", Path.GetFileName(d), n));
+                        Log(string.Format("  {0}: {1} texture(s) injected", Path.GetFileName(d.TrimEnd('\\')), n));
                     }
                     if (hasFonts)
                     {
                         arc = ArcTools.ImportFonts(arc, d, out n);
-                        Log(string.Format("  {0}: {1} font(s) rebuilt", Path.GetFileName(d), n));
+                        Log(string.Format("  {0}: {1} font(s) rebuilt", Path.GetFileName(d.TrimEnd('\\')), n));
                     }
-                    result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = d.Substring(root.Length), Data = arc };
+                    result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = relOf(d), Data = arc };
                 }
 
+                // <name>.font folders that are not inside a NAME.ARC folder: apply them to every bank that has a font
+                // with that name (e.g. "mainmenu" exists in 13 menu banks)
+                var orphanFonts = ArcTools.FindFontDirs(modDir).Concat(ArcTools.IsFontDir(modDir) ? new[] { modDir } : new string[0])
+                    .Where(fd => !HasArcAncestor(fd, modDir)).ToList();
+                if (orphanFonts.Count > 0) ApplyFontsEverywhere(cd, originalArchive, orphanFonts, result, relOf);
+
                 // sound banks: BANK.HDR\*.wav -> BANK.HDR + BANK.RAW; speech banks: BANK.HDR\*.ogg (or BANK.SPD\) -> BANK.HDR + BANK.SPD
-                var bankDirs = Directory.GetDirectories(modDir, "*.HDR", SearchOption.AllDirectories)
-                    .Concat(Directory.GetDirectories(modDir, "*.SPD", SearchOption.AllDirectories));
+                var bankDirs = dirsNamed(".HDR").Concat(dirsNamed(".SPD"));
                 foreach (var d in bankDirs)
                 {
-                    string bank = Path.GetFileNameWithoutExtension(d);
+                    string bank = Path.GetFileNameWithoutExtension(d.TrimEnd('\\'));
                     CdEntry hdrEntry;
                     if (!byName.TryGetValue(bank + ".HDR", out hdrEntry))
                     {
-                        Log("  ! skipped folder (no such sound bank in archive): " + d.Substring(root.Length));
+                        Log("  ! skipped folder (no such sound bank in archive): " + relOf(d));
                         continue;
                     }
                     byte[] hdr = ReadBlob(cd, originalArchive, hdrEntry.DataIndex);
@@ -338,13 +354,59 @@ namespace Hwbt
                     if (speech) Sound.BuildSpeechBank(hdr, data, d, out newHdr, out newData, out n);
                     else Sound.BuildSoundBank(hdr, data, d, out newHdr, out newData, out n);
                     Log(string.Format("  {0}: {1} {2} replaced", bank, n, speech ? "speech take(s)" : "sound(s)"));
-                    string src = d.Substring(root.Length);
+                    string src = relOf(d);
                     result[hdrEntry.DataIndex] = new ModItem { DataIndex = hdrEntry.DataIndex, Source = src + " (HDR)", Data = newHdr };
                     result[dataEntry.DataIndex] = new ModItem { DataIndex = dataEntry.DataIndex, Source = src + (speech ? " (SPD)" : " (RAW)"), Data = newData };
+                }
+
+                if (result.Count == itemsBefore)
+                {
+                    Log("  ! " + Path.GetFileName(modDir.TrimEnd('\\')) + ": nothing in this mod matches the game files. Expected for example:");
+                    Log("      <mod>\\TITLE.OGG   <mod>\\TEXT0000.txt   <mod>\\<BANK>.ARC\\<texture>.png");
+                    Log("      <mod>\\<BANK>.ARC\\<font>.font\\font.txt   <mod>\\<font>.font\\ (all banks)   <mod>\\<BANK>.HDR\\<sound>.wav");
                 }
             }
             foreach (var m in result.Values.OrderBy(x => x.Source)) Log("  + " + m.Source);
             return result;
+        }
+
+        static bool HasArcAncestor(string dir, string modDir)
+        {
+            string stop = Path.GetFullPath(modDir).TrimEnd('\\');
+            for (string d = Path.GetDirectoryName(Path.GetFullPath(dir)); d != null; d = Path.GetDirectoryName(d))
+            {
+                if (d.EndsWith(".ARC", StringComparison.OrdinalIgnoreCase)) return true;
+                if (string.Equals(d.TrimEnd('\\'), stop, StringComparison.OrdinalIgnoreCase)) break;
+            }
+            return false;
+        }
+
+        // Banks that contain fonts in the retail game (see docs/FORMATS.md).
+        static bool MayHaveFonts(string bankName)
+        {
+            string n = bankName.ToUpperInvariant();
+            return n.EndsWith(".ARC") && (n.Contains("FONTSARCHIVE") || n.StartsWith("GLOBALMENUASSETS"));
+        }
+
+        static void ApplyFontsEverywhere(CdFiles cd, Stream originalArchive, List<string> fontDirs, Dictionary<int, ModItem> result, Func<string, string> relOf)
+        {
+            var applied = fontDirs.ToDictionary(fd => fd, fd => 0);
+            foreach (var e in cd.Entries.Where(x => x.HasData && MayHaveFonts(x.DiskPath)))
+            {
+                ModItem prev;
+                byte[] arc = result.TryGetValue(e.DataIndex, out prev) ? (prev.Data ?? File.ReadAllBytes(prev.FilePath)) : ReadBlob(cd, originalArchive, e.DataIndex);
+                var names = ArcTools.FontNamesIn(arc);
+                var mine = fontDirs.Where(fd => names.Contains(ArcTools.FontNameOf(fd))).ToList();
+                if (mine.Count == 0) continue;
+                int n;
+                arc = ArcTools.ImportFontDirs(arc, mine, false, out n);
+                foreach (var fd in mine) applied[fd]++;
+                result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = e.DiskPath + " <- " + string.Join(", ", mine.Select(relOf)), Data = arc };
+            }
+            foreach (var kv in applied)
+                Log(kv.Value > 0
+                    ? string.Format("  {0}: font rebuilt in {1} bank(s)", relOf(kv.Key), kv.Value)
+                    : string.Format("  ! {0}: the game has no font named '{1}'", relOf(kv.Key), ArcTools.FontNameOf(kv.Key)));
         }
 
         // ---------- helpers ----------

@@ -116,24 +116,54 @@ namespace Hwbt
             if (dds) File.WriteAllBytes(Path.Combine(dir, "atlas.dds"), Tex.ToDds(font.Texture));
         }
 
-        public static bool HasFontFolders(string bankDir)
+        // A font folder is "<name>.font", or any folder holding a font.txt written by HWBT Toolkit
+        // (so a folder renamed to just "<name>" still works).
+        public static bool IsFontDir(string dir)
         {
-            return Directory.GetDirectories(bankDir, "*.font", SearchOption.AllDirectories).Length > 0;
+            if (dir.TrimEnd('\\').EndsWith(".font", StringComparison.OrdinalIgnoreCase)) return true;
+            string txt = Path.Combine(dir, "font.txt");
+            if (!File.Exists(txt)) return false;
+            using (var r = new StreamReader(txt)) { string first = r.ReadLine() ?? ""; return first.Contains("HWBT Toolkit font"); }
         }
 
-        // Applies every <name>.font\ folder (font.txt and/or atlas image) found under dir to the matching font.
+        public static string FontNameOf(string fontDir)
+        {
+            string n = Path.GetFileName(fontDir.TrimEnd('\\'));
+            return n.EndsWith(".font", StringComparison.OrdinalIgnoreCase) ? n.Substring(0, n.Length - 5) : n;
+        }
+
+        public static List<string> FindFontDirs(string root)
+        {
+            return Directory.GetDirectories(root, "*", SearchOption.AllDirectories).Where(IsFontDir).ToList();
+        }
+
+        public static bool HasFontFolders(string bankDir) { return FindFontDirs(bankDir).Count > 0; }
+
+        // Applies every font folder (font.txt and/or atlas image) found under dir to the matching font.
         // Without font.txt only the atlas is replaced; without an atlas image only the metrics change.
         public static byte[] ImportFonts(byte[] arc, string dir, out int count)
+        {
+            return ImportFontDirs(arc, FindFontDirs(dir), true, out count);
+        }
+
+        // Names of the fonts in a bank (without loading their data).
+        public static HashSet<string> FontNamesIn(byte[] arc)
+        {
+            return new HashSet<string>(FontFileNames(ArcBank.Parse(arc)).Values, StringComparer.OrdinalIgnoreCase);
+        }
+
+        // Applies the given <name>.font folders. warnMissing: log folders whose font isn't in this bank.
+        public static byte[] ImportFontDirs(byte[] arc, IEnumerable<string> fontDirs, bool warnMissing, out int count)
         {
             var b = ArcBank.Parse(arc);
             var byName = new Dictionary<string, ArcEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var kv in FontFileNames(b)) byName[kv.Value] = kv.Key;
             count = 0;
-            foreach (var fd in Directory.GetDirectories(dir, "*.font", SearchOption.AllDirectories))
+            foreach (var fd in fontDirs)
             {
-                string name = Path.GetFileNameWithoutExtension(fd);
+                string name = FontNameOf(fd);
                 ArcEntry e;
-                if (!byName.TryGetValue(name, out e)) { Archive.Log("  ! no font named " + name + " in this bank"); continue; }
+                if (!byName.TryGetValue(name, out e)) { if (warnMissing) Archive.Log("  ! no font named " + name + " in this bank"); continue; }
                 var orig = GameFont.Parse(b.GetData(e));
 
                 // newest atlas image wins (decompile may have written both atlas.png and atlas.dds)

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2.1
+* Fixed: a font folder was silently ignored when it was not inside a `<BANK.ARC>\` folder, or when the mod
+  folder itself was the bank folder (`mods\A_MAINMENU_FONTSARCHIVE.ARC\`). Now:
+  * `mods\X\<name>.font\` is applied to **every bank** that has a font with that name (`mainmenu`: 14 banks);
+  * a mod folder named like a bank (`*.ARC`, `*.HDR`) is treated as that bank;
+  * a folder with an HWBT `font.txt` is recognised even without the `.font` suffix;
+  * a mod that matches nothing is reported, with examples of the expected layout.
+
 ## v1.2
 * **New buttons**: "Fonts ARC → PNG/TXT…" and "Sounds HDR → WAV/OGG…". "Textures ARC → PNG/TGA…" now writes only
   images (PNG, or TGA for textures that were TGA). All three export straight into `<BANK.ARC>\` / `<BANK>.HDR\`
