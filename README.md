@@ -37,7 +37,7 @@ This toolkit stands on the work of other people. If you enjoy it, please support
 
 ## Install
 
-1. Download `HWBT-Toolkit-v1.1.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
+1. Download `HWBT-Toolkit-v1.1.1.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
    and unzip it anywhere.
 2. Run `hwbt.exe`. The language selector is at the top of the window.
 
@@ -50,7 +50,7 @@ The toolkit requires .NET Framework 4.5 or later, which is built into Windows 8,
 | Install mods                   | installs every checked mod from `mods\` into `Data\` and `lData\`    |
 | Restore original               | reverts both archives byte-for-byte                                  |
 | Unpack archive…                | extracts all 2,141 game files                                        |
-| Unpack & decompile…            | extracts everything and unpacks the files' contents: textures → PNG/TGA, texts → TXT, sounds → WAV, speech → OGG, all other `.ARC` entries → `.bin` + `index.txt` |
+| Unpack & decompile…            | extracts everything and unpacks the files' contents: textures → PNG/TGA, texts → TXT, sounds → WAV, speech and music → OGG, all other `.ARC` entries → `.bin` + `index.txt` |
 | ☐ Convert all textures to PNG  | textures named `*.tga` in the game are exported as TGA unless this is checked |
 | Textures ARC → PNG/DDS…        | exports the textures of `.ARC` banks                                 |
 | Texts LDA → TXT…               | converts string tables to editable text                              |

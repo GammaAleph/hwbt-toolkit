@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.1
+* Unpack & decompile also writes the music: `decompiled\music\*.OGG` plus an `index.txt` that says where each
+  track plays (main menu / race / results screen, from the `MUSICARC`, `IGMUSICARC` and `RESULTSMUSIC` indexes).
+  Videos are not copied, because they are already in the game's `videos\` folder.
+
 ## v1.1
 * **Unpack & decompile**: full extraction of everything inside the game files. Textures go to PNG (optionally
   DDS), texts to TXT, sound banks (`.HDR/.RAW`) to WAV, and speech banks (`.HDR/.SPD`) to separate OGG files

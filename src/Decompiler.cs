@@ -5,6 +5,7 @@
 //   decompiled\texts\*.txt         .LDA string tables
 //   decompiled\sounds\<BANK>\*.wav .HDR/.RAW sound banks
 //   decompiled\speech\<BANK>\*.ogg .HDR/.SPD speech banks
+//   decompiled\music\*.OGG         music tracks + index.txt (menu / race / results screen)
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -64,6 +65,10 @@ namespace Hwbt
             }
             Archive.Log(string.Format("Speech: {0} .ogg", speech));
 
+            // music: the tracks are plain Ogg Vorbis already - copy them and say where each one plays
+            int music = DecompileMusic(filesDir, Path.Combine(outDir, "music"));
+            Archive.Log(string.Format("Music: {0} .ogg", music));
+
             // arcbanks (parallel - texture decoding dominates)
             var arcs = Directory.GetFiles(filesDir, "*.ARC");
             Parallel.ForEach(arcs, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount) }, f =>
@@ -83,6 +88,43 @@ namespace Hwbt
 
             File.WriteAllText(Path.Combine(outDir, "README.txt"), Readme(), Encoding.UTF8);
             Archive.Log(string.Format("Decompiled into {0}{1}", outDir, errors > 0 ? " - " + errors + " error(s), see log" : ""));
+        }
+
+        // Music index banks (snda without .RAW) list the track names used in each part of the game.
+        static readonly string[][] MusicIndexes =
+        {
+            new[] { "MUSICARC", "main menu" },
+            new[] { "IGMUSICARC", "race" },
+            new[] { "RESULTSMUSIC", "results screen" },
+        };
+
+        static int DecompileMusic(string filesDir, string outDir)
+        {
+            var oggs = Directory.GetFiles(filesDir, "*.OGG");
+            if (oggs.Length == 0) return 0;
+            Directory.CreateDirectory(outDir);
+            foreach (var f in oggs) File.Copy(f, Path.Combine(outDir, Path.GetFileName(f)), true);
+
+            var where = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var mi in MusicIndexes)
+            {
+                string hdr = Path.Combine(filesDir, mi[0] + ".HDR");
+                if (!File.Exists(hdr)) continue;
+                byte[] h = File.ReadAllBytes(hdr);
+                if (!Sound.IsSoundBank(h)) continue;
+                foreach (var n in Sound.SoundItemNames(h)) where[n] = mi[1] + " (" + mi[0] + ")";
+            }
+            var sb = new StringBuilder();
+            sb.AppendLine("# HWBT Toolkit - music tracks (Ogg Vorbis)");
+            sb.AppendLine("# To replace a track put an .ogg with the SAME name into mods\\<YourMod>\\ (e.g. mods\\MyMusic\\TITLE.OGG)");
+            sb.AppendLine();
+            foreach (var f in oggs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            {
+                string name = Path.GetFileNameWithoutExtension(f), use;
+                sb.AppendFormat("{0,-14} {1}\r\n", Path.GetFileName(f), where.TryGetValue(name, out use) ? use : "");
+            }
+            File.WriteAllText(Path.Combine(outDir, "index.txt"), sb.ToString(), Encoding.UTF8);
+            return oggs.Length;
         }
 
         // Splits one bank: textures -> PNG (+DDS), every other entry -> raw .bin, plus an index.
@@ -145,6 +187,8 @@ texts\TEXTxxyy.txt           string tables (.LDA), xx = language (00 English, 01
                              edit and put into a mod folder to change in-game texts
 sounds\<BANK>\*.wav          sound banks (.HDR + .RAW), 16-bit PCM
                              to mod: mods\<YourMod>\<BANK>.HDR\<same name>.wav
+music\*.OGG, music\index.txt music tracks and where each one plays (menu / race / results screen)
+                             to mod: mods\<YourMod>\<SAME NAME>.OGG
 speech\<BANK>\*.ogg          commentary speech banks (.HDR + .SPD), one Ogg Vorbis file per take
                              to mod: mods\<YourMod>\<BANK>.HDR\<same name>.ogg
 arc\<BANK.ARC>\index.txt     list of every entry of the bank (type, offset, size, name, texture format/mips)
@@ -154,7 +198,7 @@ arc\<BANK.ARC>\textures\     textures as PNG/TGA (and DDS if requested); to mod 
 arc\<BANK.ARC>\entries\      all other entries as raw binary (models, meshes, vertex/index buffers, materials,
                              animations, plain data ...); their internal formats are only partially documented
 
-Raw archive files are in ..\files. Music (.OGG), videos (.WMV) and shaders (.FX source) are already in
+Raw archive files are in ..\files. Videos (.WMV, same as the game's videos folder) and shaders (.FX source) are already in
 standard formats there. .FXC are compiled shaders.
 ";
         }
