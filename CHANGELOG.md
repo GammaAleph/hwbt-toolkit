@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.3
 * **Mods in the decompile layout**: a mod can use exactly the structure that *Unpack and decompile* writes,
   with a `Data\` and an `lData\` part: `arc\<BANK.ARC>\textures\`, `arc\<BANK.ARC>\fonts\`, `texts\`,
   `sounds\<BANK>\*.wav`, `speech\<BANK>\*.ogg`, `music\`, `files\`. Sound and speech folders no longer need
