@@ -11,10 +11,10 @@ namespace Hwbt
     public static class TexImage
     {
         // ---------- decode ----------
-        public static Bitmap Decode(byte[] entry)
+        public static byte[] DecodeBgra(byte[] entry, out int w, out int ht)
         {
             var h = TexHeader.Read(entry, 0);
-            int w = (int)h.Width, ht = (int)h.Height;
+            w = (int)h.Width; ht = (int)h.Height;
             var px = new byte[w * ht * 4]; // BGRA
             int p = TexHeader.Size;
             uint f = h.Format;
@@ -54,7 +54,7 @@ namespace Hwbt
                     px[i * 4] = (byte)b; px[i * 4 + 1] = (byte)g; px[i * 4 + 2] = (byte)r; px[i * 4 + 3] = (byte)a;
                 }
             }
-            return ToBitmap(px, w, ht);
+            return px;
         }
 
         static uint X5(uint v) { return v << 3 | v >> 2; }
@@ -125,45 +125,54 @@ namespace Hwbt
         }
 
         // ---------- encode ----------
-        // PNG/BMP/... -> A8R8G8B8 entry payload with as many mip levels as the original had.
+        // PNG/TGA/BMP/JPG -> texture entry payload in the ORIGINAL texture's format (DXT1/3/5, A4R4G4B4, ...)
+        // with the same number of mip levels (generated with a box filter). Palette (P8) textures become A8R8G8B8.
         public static byte[] FromImage(string file, TexHeader original)
         {
-            using (var src = new Bitmap(file))
-            {
-                int w = src.Width, h = src.Height;
-                uint mips = original.Mips <= 1 ? 1u : (uint)Math.Min(original.Mips, MaxMips(w, h));
-                byte[] level = ReadBgra(src);
-                var ms = new MemoryStream();
-                var hdr = new TexHeader { Width = (uint)w, Height = (uint)h, Mips = mips, Hash = original.Hash, Format = Tex.A8R8G8B8 };
-                var hb = new byte[TexHeader.Size];
-                hdr.Write(hb, 0);
-                ms.Write(hb, 0, hb.Length);
-                for (int m = 0; m < mips; m++)
-                {
-                    ms.Write(level, 0, level.Length);
-                    if (m + 1 < mips) { level = Half(level, w, h); w = Math.Max(1, w / 2); h = Math.Max(1, h / 2); }
-                }
-                return ms.ToArray();
-            }
+            int w, h;
+            byte[] px = LoadBgra(file, out w, out h);
+            uint fmt = TexEncode.CanEncode(original.Format) ? original.Format : Tex.A8R8G8B8;
+            uint mips = original.Mips <= 1 ? 1u : (uint)Math.Min(original.Mips, MaxMips(w, h));
+            byte[] chain = TexEncode.EncodeChain(px, w, h, fmt, (int)mips);
+            var hdr = new TexHeader { Width = (uint)w, Height = (uint)h, Mips = mips, Hash = original.Hash, Format = fmt };
+            var outb = new byte[TexHeader.Size + chain.Length];
+            hdr.Write(outb, 0);
+            Buffer.BlockCopy(chain, 0, outb, TexHeader.Size, chain.Length);
+            return outb;
+        }
+
+        public static byte[] LoadBgra(string file, out int w, out int h)
+        {
+            if (file.EndsWith(".tga", StringComparison.OrdinalIgnoreCase)) return Tga.Read(File.ReadAllBytes(file), out w, out h);
+            using (var src = new Bitmap(file)) { w = src.Width; h = src.Height; return ReadBgra(src); }
+        }
+
+        // Decodes the top mip level of a texture entry to a Bitmap.
+        public static Bitmap Decode(byte[] entry)
+        {
+            int w, h;
+            byte[] px = DecodeBgra(entry, out w, out h);
+            return ToBitmap(px, w, h);
         }
 
         static int MaxMips(int w, int h) { int n = 1; while (w > 1 || h > 1) { w = Math.Max(1, w / 2); h = Math.Max(1, h / 2); n++; } return n; }
 
+        // Copies pixels straight out of the bitmap (LockBits converts to non-premultiplied 32-bit ARGB).
+        // Do not use Graphics.DrawImage here: it alpha-blends and changes the colour of semi-transparent pixels.
         static byte[] ReadBgra(Bitmap src)
         {
             int w = src.Width, h = src.Height;
-            using (var bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb))
+            var data = src.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
             {
-                using (var g = Graphics.FromImage(bmp)) { g.DrawImage(src, new Rectangle(0, 0, w, h)); }
-                var data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
                 var px = new byte[w * h * 4];
                 for (int y = 0; y < h; y++) Marshal.Copy(data.Scan0 + y * data.Stride, px, y * w * 4, w * 4);
-                bmp.UnlockBits(data);
                 return px;
             }
+            finally { src.UnlockBits(data); }
         }
 
-        static byte[] Half(byte[] px, int w, int h)
+        public static byte[] Half(byte[] px, int w, int h)
         {
             int nw = Math.Max(1, w / 2), nh = Math.Max(1, h / 2);
             var o = new byte[nw * nh * 4];

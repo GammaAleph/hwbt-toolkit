@@ -24,6 +24,14 @@ namespace Hwbt
             { "btnRefresh", new[] { "Refresh list", "Обновить список" } },
             { "btnOpenMods", new[] { "Open mods folder", "Открыть папку модов" } },
             { "btnUnpack", new[] { "Unpack archive…", "Распаковать архив…" } },
+            { "chkAllPng", new[] { "Convert all textures to PNG (otherwise .tga textures stay .tga)",
+                                   "Конвертировать все текстуры в PNG (иначе .tga остаются .tga)" } },
+            { "btnDecompile", new[] { "Unpack & decompile…", "Распаковать и декомпилировать…" } },
+            { "askDecompileDir", new[] { "Where to unpack and decompile? (Data and lData sub-folders will be created)",
+                                         "Куда распаковать и декомпилировать? (будут созданы подпапки Data и lData)" } },
+            { "decompileInfo", new[] {
+                "Full unpack: raw files -> files\\, textures -> PNG, texts -> TXT, sounds -> WAV, other bank entries -> .bin (needs ~6 GB, takes several minutes)…",
+                "Полная распаковка: файлы -> files\\, текстуры -> PNG, тексты -> TXT, звуки -> WAV, прочие записи банков -> .bin (нужно ~6 ГБ, займёт несколько минут)…" } },
             { "btnTex", new[] { "Textures ARC → PNG/DDS…", "Текстуры ARC → PNG/DDS…" } },
             { "btnLda", new[] { "Texts LDA → TXT…", "Тексты LDA → TXT…" } },
             { "communityGroup", new[] { "Community patches by Kyubikkumasuta - V1: music fixes; V2: V1 + track order, look-behind camera, full controller support",
@@ -49,12 +57,12 @@ namespace Hwbt
             { "noModsChecked", new[] { "No mods checked - restoring the original archives.", "Ни один мод не отмечен - возвращаю оригинальные архивы." } },
             { "askUnpackDir", new[] { "Where to unpack? (Data and lData sub-folders will be created)", "Куда распаковать архив? (будут созданы подпапки Data и lData)" } },
             { "pickArc", new[] { "Select .ARC files (from the unpacked archive)", "Выберите .ARC файлы (из распакованного архива)" } },
-            { "askTexDir", new[] { "Where to save textures (PNG + DDS)?", "Куда сохранить текстуры (PNG + DDS)?" } },
+            { "askTexDir", new[] { "Where to save textures (images + DDS)?", "Куда сохранить текстуры (картинки + DDS)?" } },
             { "texCount", new[] { "{0}: {1} textures", "{0}: {1} текстур" } },
             { "texHint1", new[] { "To put textures into the game: in your mod folder create a folder named like the bank (e.g. CAR_LOD0_GRA.ARC)",
                                   "Чтобы вставить текстуры в игру: создайте в папке мода папку с именем банка (например CAR_LOD0_GRA.ARC)" } },
-            { "texHint2", new[] { "and put ONLY the edited .png or .dds files there (keep the file names).",
-                                  "и положите туда ТОЛЬКО изменённые .png или .dds (имена файлов не менять)." } },
+            { "texHint2", new[] { "and put ONLY the edited .png/.tga/.dds files there (keep the file names; PNG/TGA are compressed into the original format).",
+                                  "и положите туда ТОЛЬКО изменённые .png/.tga/.dds (имена не менять; PNG/TGA сжимаются в исходный формат)." } },
             { "ldaFilter", new[] { "Texts (*.LDA)|*.LDA", "Тексты (*.LDA)|*.LDA" } },
             { "ldaHint", new[] { "Put the edited TEXTxxxx.txt into a mod folder - it is compiled during installation.",
                                  "Положите изменённый TEXTxxxx.txt в папку мода - он будет скомпилирован при установке." } },
@@ -98,13 +106,19 @@ namespace Hwbt
             get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HWBT-Toolkit", "settings.ini"); }
         }
 
+        // Other persisted GUI options.
+        public static bool AllPng; // export .tga-named textures as PNG too
+
         public static void Load()
         {
             Current = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ru" ? 1 : 0;
             try
             {
                 foreach (var line in File.ReadAllLines(SettingsFile))
+                {
                     if (line.StartsWith("lang=")) Current = line.Substring(5).Trim() == "ru" ? 1 : 0;
+                    if (line.StartsWith("allpng=")) AllPng = line.Substring(7).Trim() == "1";
+                }
             }
             catch { }
         }
@@ -114,7 +128,7 @@ namespace Hwbt
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile));
-                File.WriteAllText(SettingsFile, "lang=" + (Current == 1 ? "ru" : "en") + "\r\n");
+                File.WriteAllText(SettingsFile, "lang=" + (Current == 1 ? "ru" : "en") + "\r\nallpng=" + (AllPng ? "1" : "0") + "\r\n");
             }
             catch { }
         }

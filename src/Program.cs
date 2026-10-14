@@ -36,8 +36,20 @@ namespace Hwbt
                     case "lda2txt": return Cmd.Lda2Txt(Arg(args, 1), args.Length > 2 ? args[2] : null);
                     case "txt2lda": return Cmd.Txt2Lda(Arg(args, 1), args.Length > 2 ? args[2] : null);
                     case "arc-list": return Cmd.ArcList(Arg(args, 1));
-                    case "tex-export": return Cmd.TexExport(Arg(args, 1), Arg(args, 2), args.Length > 3 ? args[3].ToLowerInvariant() : "png");
+                    case "tex-export": return Cmd.TexExport(Arg(args, 1), Arg(args, 2), args.Length > 3 ? args[3].ToLowerInvariant() : "image");
                     case "tex-import": return Cmd.TexImport(Arg(args, 1), Arg(args, 2), args.Length > 3 ? args[3] : null);
+                    case "unpack-all": Decompiler.UnpackAll(Arg(args, 1), Arg(args, 2), args.Contains("--dds"), args.Contains("--png")); return 0;
+                    case "decompile": Decompiler.DecompileFolder(Arg(args, 1), Arg(args, 2), args.Contains("--dds"), args.Contains("--png")); return 0;
+                    case "hdr2wav":
+                        {
+                            string hdr = Arg(args, 1);
+                            int n = Sound.HdrToWav(File.ReadAllBytes(hdr), Path.ChangeExtension(hdr, ".RAW"),
+                                args.Length > 2 ? args[2] : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(hdr)), Path.GetFileNameWithoutExtension(hdr)));
+                            Console.WriteLine("Wrote {0} .wav file(s)", n);
+                            return 0;
+                        }
+                    case "make-soundbank": return Cmd.MakeBank(Arg(args, 1), Arg(args, 2), args.Length > 3 ? args[3] : null, false);
+                    case "make-speechbank": return Cmd.MakeBank(Arg(args, 1), Arg(args, 2), Arg(args, 3), true);
                     case "survey": return Cmd.Survey(Arg(args, 1));
                     case "gui": Gui.Run(); return 0;
                     default: Usage(); return 1;
@@ -70,6 +82,16 @@ Archive:
   unpack <data> <outDir> [mask]       extract files (mask: *.OGG, TEXT*.LDA ...)
   pack   <data> <modDir> <outDir>     build a NEW CDFILES.DAT+ARCHIVE0.AR with mod files
   patch  <data> <modDir> [modDir...]  patch IN PLACE (auto-backup; re-run = re-apply)
+  unpack-all <data> <outDir> [--dds] [--png]  unpack + decompile everything (textures->PNG/TGA,
+                                      texts->TXT, sounds->WAV, speech->OGG, other entries->.bin)
+  decompile  <filesDir> <outDir> [--dds] [--png]  decompile an already unpacked folder
+                                      (--png: write .tga-named textures as PNG too)
+  hdr2wav    <file.HDR> [outDir]      sound bank -> .wav files
+  make-soundbank  <wavDir> <out.HDR> [template.HDR]
+                                      .wav files -> NEW sound bank (out.HDR + out.RAW); with a template
+                                      only the matching sounds are replaced and extra .wav are added
+  make-speechbank <oggDir> <out.HDR> <template.HDR>
+                                      .ogg files -> speech bank (out.HDR + out.SPD), based on a template
   restore   <data>                    revert to the original (keeps backup)
   uninstall <data>                    revert and delete the backup
 
@@ -83,8 +105,10 @@ Texts (.LDA):
 
 Arcbanks (.ARC) / textures:
   arc-list   <file.ARC>               list entries of a bank
-  tex-export <file.ARC|folder> <out> [png|dds]  textures -> images (folder: one sub-folder per bank)
-  tex-import <file.ARC> <imgDir> [out.ARC]      .png/.dds -> bank (PNG is stored uncompressed 32-bit)
+  tex-export <file.ARC|folder> <out> [image|png|dds]  textures -> images (image = keep .tga/.png as
+                                      originally named, png = everything as PNG; folder: one sub-folder per bank)
+  tex-import <file.ARC> <imgDir> [out.ARC]      .png/.tga/.dds -> bank (PNG/TGA are compressed into the
+                                      original format with the original mip-map count)
 
 Mod folder layout (used by patch / pack / install-mods):
   SOMEFILE.OGG, CAR.ARC ...  replaces the archive file with the same name
@@ -178,19 +202,20 @@ Mod folder layout (used by patch / pack / install-mods):
 
         public static int TexExport(string input, string outDir, string format)
         {
-            if (format != "png" && format != "dds") throw new ArgumentException("format must be png or dds");
+            if (format != "image" && format != "png" && format != "dds") throw new ArgumentException("format must be image, png or dds");
+            bool allPng = format == "png";
             if (Directory.Exists(input))
             {
                 int total = 0, banks = 0;
                 foreach (var f in Directory.GetFiles(input, "*.ARC"))
                 {
-                    int n = ArcTools.ExportTextures(File.ReadAllBytes(f), Path.Combine(outDir, Path.GetFileName(f)), format);
+                    int n = ArcTools.ExportTextures(File.ReadAllBytes(f), Path.Combine(outDir, Path.GetFileName(f)), format == "dds" ? "dds" : "image", allPng);
                     if (n > 0) { total += n; banks++; }
                 }
                 Console.WriteLine("Exported {0} textures from {1} banks to {2}", total, banks, outDir);
                 return 0;
             }
-            int c = ArcTools.ExportTextures(File.ReadAllBytes(input), outDir, format);
+            int c = ArcTools.ExportTextures(File.ReadAllBytes(input), outDir, format == "dds" ? "dds" : "image", allPng);
             Console.WriteLine("Exported {0} textures to {1}", c, outDir);
             return 0;
         }
@@ -201,6 +226,27 @@ Mod folder layout (used by patch / pack / install-mods):
             byte[] result = ArcTools.ImportTextures(File.ReadAllBytes(arc), ddsDir, out n);
             File.WriteAllBytes(output ?? arc, result);
             Console.WriteLine("Imported {0} texture(s) into {1}", n, output ?? arc);
+            return 0;
+        }
+
+        // Builds out.HDR + out.RAW (sound) or out.HDR + out.SPD (speech). The template's data file
+        // (.RAW / .SPD) must lie next to the template .HDR.
+        public static int MakeBank(string dir, string outHdr, string template, bool speech)
+        {
+            byte[] tHdr = null, tData = null;
+            if (template != null)
+            {
+                tHdr = File.ReadAllBytes(template);
+                tData = File.ReadAllBytes(Path.ChangeExtension(template, speech ? ".SPD" : ".RAW"));
+            }
+            byte[] hdr, data;
+            int n;
+            if (speech) Sound.BuildSpeechBank(tHdr, tData, dir, out hdr, out data, out n);
+            else Sound.BuildSoundBank(tHdr, tData, dir, out hdr, out data, out n);
+            File.WriteAllBytes(outHdr, hdr);
+            string dataFile = Path.ChangeExtension(outHdr, speech ? ".SPD" : ".RAW");
+            File.WriteAllBytes(dataFile, data);
+            Console.WriteLine("Wrote {0} and {1} ({2} replaced)", outHdr, dataFile, n);
             return 0;
         }
 

@@ -50,6 +50,8 @@ The toolkit requires .NET Framework 4.5 or later, which is built into Windows 8,
 | Install mods                   | installs every checked mod from `mods\` into `Data\` and `lData\`    |
 | Restore original               | reverts both archives byte-for-byte                                  |
 | Unpack archive…                | extracts all 2,141 game files                                        |
+| Unpack & decompile…            | extracts everything and unpacks the files' contents: textures → PNG/TGA, texts → TXT, sounds → WAV, speech → OGG, all other `.ARC` entries → `.bin` + `index.txt` |
+| ☐ Convert all textures to PNG  | textures named `*.tga` in the game are exported as TGA unless this is checked |
 | Textures ARC → PNG/DDS…        | exports the textures of `.ARC` banks                                 |
 | Texts LDA → TXT…               | converts string tables to editable text                              |
 | Install Patch V1 / V2          | downloads the author's patch (SHA-256 verified) and runs its installer |
@@ -59,26 +61,56 @@ The toolkit requires .NET Framework 4.5 or later, which is built into Windows 8,
 
 Each sub-folder of `mods\` is one mod. Folders whose names start with `_` are ignored.
 
-| Put this in the mod folder            | Result                                          |
-|---------------------------------------|-------------------------------------------------|
-| `NAME.EXT` (any archive file)         | replaces that file (`TITLE.OGG`, `CAR.ARC`, …)  |
-| `TEXT0000.txt`                        | compiled into `TEXT0000.LDA`                    |
-| folder `NAME.ARC\` with `*.png/*.dds` | textures injected into the original bank        |
+| Put this in the mod folder                    | Result                                          |
+|-----------------------------------------------|-------------------------------------------------|
+| `NAME.EXT` (any archive file)                 | replaces that file (`TITLE.OGG`, `CAR.ARC`, …)  |
+| `TEXT0000.txt`                                | compiled into `TEXT0000.LDA`                    |
+| folder `NAME.ARC\` with `*.png` `*.tga` `*.dds` | textures injected into the original bank     |
+| folder `NAME.HDR\` with `*.wav`               | sound bank rebuilt (`NAME.HDR` + `NAME.RAW`)    |
+| folder `NAME.HDR\` with `*.ogg`               | speech bank rebuilt (`NAME.HDR` + `NAME.SPD`)   |
 
-Example: `mods\BlueCar\16ANGELS_LOD0_GRA.ARC\16AngelsBodyDA.png`.
+Examples:
+* `mods\BlueCar\16ANGELS_LOD0_GRA.ARC\16AngelsBodyDA.png`
+* `mods\NewEngine\16ANGELS_SND.HDR\h3_4k_2.wav`
+* `mods\Commentary\COMM.HDR\321GO.ogg`
+
+Use the file names that **Unpack & decompile** produces. PNG and TGA textures are compressed into the original
+texture's format (DXT1/DXT3/A4R4G4B4…) with the same number of mip-maps, so the bank keeps its size. A `.dds` is
+stored exactly as it is (use it to pick a different format). Extra `.wav`/`.ogg` files that don't match an
+existing name are added to the bank as new sounds or phrases. The game only plays them if something
+references them, though.
 The formats are described in [docs/FORMATS.md](docs/FORMATS.md).
+
+### High-resolution textures
+
+The game accepts larger textures in principle, because each texture stores its own size. There are hard limits:
+
+* **16 MB per texture** (an arcbank entry has a 24-bit size). DXT1 4096×4096, DXT3/DXT5 4096×2048 and
+  uncompressed 2048×1024 fit. The toolkit refuses anything bigger.
+* `HOT.exe` is a 32-bit program **without Large Address Aware**, so it has only 2 GB of memory. Keep big
+  textures compressed (PNG/TGA are compressed automatically).
+* The engine may use fixed-size load buffers. Test a single upscaled car first (for example 2048×1024),
+  then go further.
+* Keep the aspect ratio, because the UVs are relative.
+
+The toolkit warns about textures above 2048, entries much larger than the original, and banks that grow a lot.
 
 ### Command line
 
 ```
 hwbt info | list <Data>
 hwbt unpack <Data> <out> [mask]
+hwbt unpack-all <Data> <out> [--dds]         full unpack + decompile
+hwbt decompile <unpackedDir> <out> [--dds]   decompile an already unpacked folder
+hwbt hdr2wav <file.HDR> [out]                sound bank -> .wav
+hwbt make-soundbank <wavDir> <out.HDR> [template.HDR]     .wav -> new/updated sound bank
+hwbt make-speechbank <oggDir> <out.HDR> <template.HDR>    .ogg -> speech bank
 hwbt pack <Data> <modDir> <out>
 hwbt patch <Data> <modDir> [modDir2 ...]     hwbt restore | uninstall <Data>
 hwbt install-mods <GameDir> <mods>           hwbt uninstall-mods <GameDir>
 hwbt lda2txt <file.LDA|dir> [out]            hwbt txt2lda <file.txt> [out.LDA]
 hwbt arc-list <file.ARC>
-hwbt tex-export <file.ARC|dir> <out> [png|dds]
+hwbt tex-export <file.ARC|dir> <out> [image|png|dds]   image = .tga/.png as originally named
 hwbt tex-import <file.ARC> <imgDir> [out.ARC]
 ```
 
@@ -111,8 +143,13 @@ The code is plain C# 5, so it also builds with Visual Studio or MSBuild (target 
 | `src/Archive.cs`         | unpack, repack, in-place patch, rollback, mods  |
 | `src/ArcBank.cs`         | `.ARC` banks (ARCC)                             |
 | `src/Texture.cs`         | texture header, DDS                             |
-| `src/TexImage.cs`        | DXT1/3/5 and 16/32-bit decoders, PNG            |
+| `src/TexImage.cs`        | DXT1/3/5 and 16/32-bit decoders, image import   |
+| `src/TexEncode.cs`       | DXT1/3/5 and 16/32-bit encoders, mip-maps       |
+| `src/Tga.cs`             | TGA reader/writer                               |
 | `src/Lda.cs`             | `.LDA` string tables                            |
+| `src/Sound.cs`           | `.HDR/.RAW` sound banks → WAV, `.HDR/.SPD` speech → OGG |
+| `src/Decompiler.cs`      | full unpack & decompile                         |
+| `src/FolderPicker.cs`    | Explorer-style folder dialog                    |
 | `src/CommunityPatch.cs`  | download/install of community patches V1/V2     |
 | `src/Lang.cs`            | EN/RU localisation                              |
 | `src/Gui.cs`             | window                                          |
@@ -122,6 +159,9 @@ The code is plain C# 5, so it also builds with Visual Studio or MSBuild (target 
 
 * Rebuilding `Data` and `lData` without changes reproduces the original archives byte-for-byte.
 * All 50 text tables and all 10,534 textures survive an export/import round trip unchanged.
+* Re-encoding every game texture from PNG/TGA: uncompressed formats are lossless; DXT averages 49 dB (DXT1)
+  and 59 dB (DXT3) PSNR, and every result has exactly the original size.
+* All 59 sound and speech banks rebuild byte-for-byte from the extracted `.wav`/`.ogg` files.
 * Mod install and rollback were tested on a copy of the game; after rollback the files match the original
   SHA-1 hashes.
 * Patch V2 installs on the English `HOT.exe` (SHA-256 `a557a1ca…`) and passes its installer's own

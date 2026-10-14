@@ -24,6 +24,7 @@ namespace Hwbt
         TextBox gameBox, modsBox, logBox;
         CheckedListBox modList;
         ComboBox langBox;
+        CheckBox allPngBox;
         Label langLabel, gameLabel, modsLabel, cpStatus;
         GroupBox modGroup, cpGroup;
         LinkLabel credits;
@@ -90,8 +91,13 @@ namespace Hwbt
             AddButton(bar, "btnRefresh", RefreshMods, false);
             AddButton(bar, "btnOpenMods", delegate { Directory.CreateDirectory(modsBox.Text); Process.Start("explorer.exe", "\"" + modsBox.Text + "\""); }, false);
             AddButton(bar, "btnUnpack", UnpackArchive, true);
+            AddButton(bar, "btnDecompile", UnpackAndDecompile, true);
             AddButton(bar, "btnTex", ExportTextures, true);
             AddButton(bar, "btnLda", ExportTexts, true);
+            allPngBox = new CheckBox { AutoSize = true, Checked = Lang.AllPng, Margin = new Padding(6, 7, 3, 3) };
+            texts[allPngBox] = "chkAllPng";
+            allPngBox.CheckedChanged += delegate { Lang.AllPng = allPngBox.Checked; Lang.Save(); };
+            bar.Controls.Add(allPngBox);
             root.Controls.Add(bar);
 
             // community patch
@@ -164,8 +170,8 @@ namespace Hwbt
             var b = new Button { Text = "…", Width = 32 };
             b.Click += delegate
             {
-                using (var d = new FolderBrowserDialog { SelectedPath = box.Text })
-                    if (d.ShowDialog(this) == DialogResult.OK) box.Text = d.SelectedPath;
+                string picked = FolderPicker.Show(this, Lang.T(key), box.Text);
+                if (picked != null) box.Text = picked;
             };
             p.Controls.Add(b, 2, row);
             return l;
@@ -232,6 +238,22 @@ namespace Hwbt
             }
         }
 
+        void UnpackAndDecompile()
+        {
+            string game = GameDir();
+            string outDir = (string)Invoke(new Func<string>(() => AskFolder(Lang.T("askDecompileDir"))));
+            if (outDir == null) return;
+            Log(Lang.T("decompileInfo"));
+            foreach (var d in Archive.GameDataDirs)
+            {
+                string dir = Path.Combine(game, d);
+                if (!File.Exists(Archive.DatIn(dir))) continue;
+                Log("== " + d);
+                Decompiler.UnpackAll(dir, Path.Combine(outDir, d), false, Lang.AllPng);
+            }
+            Process.Start("explorer.exe", "\"" + outDir + "\"");
+        }
+
         void ExportTextures()
         {
             string[] files = null; string outDir = null;
@@ -245,8 +267,8 @@ namespace Hwbt
             foreach (var f in files)
             {
                 string dst = Path.Combine(outDir, Path.GetFileName(f));
-                int n = ArcTools.ExportTextures(File.ReadAllBytes(f), Path.Combine(dst, "png"), "png");
-                ArcTools.ExportTextures(File.ReadAllBytes(f), Path.Combine(dst, "dds"), "dds");
+                int n = ArcTools.ExportTextures(File.ReadAllBytes(f), Path.Combine(dst, "images"), "image", Lang.AllPng);
+                ArcTools.ExportTextures(File.ReadAllBytes(f), Path.Combine(dst, "dds"), "dds", false);
                 Log(Lang.F("texCount", Path.GetFileName(f), n));
             }
             Log(Lang.T("texHint1"));
@@ -365,10 +387,13 @@ namespace Hwbt
             return g;
         }
 
+        string lastFolder;
+
         string AskFolder(string title)
         {
-            using (var d = new FolderBrowserDialog { Description = title, ShowNewFolderButton = true })
-                return d.ShowDialog(this) == DialogResult.OK ? d.SelectedPath : null;
+            string picked = FolderPicker.Show(this, title, lastFolder);
+            if (picked != null) lastFolder = picked;
+            return picked;
         }
 
         static string DetectGameDir()

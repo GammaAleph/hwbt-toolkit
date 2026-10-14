@@ -233,7 +233,9 @@ namespace Hwbt
         // Recognised items in a mod folder (any sub-folder depth):
         //   NAME.EXT          file with the same name as an archive entry -> replaces it
         //   TEXTxxxx.txt      text exported by lda2txt -> compiled into TEXTxxxx.LDA
-        //   NAME.ARC\*.dds|png  folder named like an arcbank -> textures injected into the original bank
+        //   NAME.ARC\*.png|tga|dds  folder named like an arcbank -> textures injected into the original bank
+        //   NAME.HDR\*.wav      sound bank rebuilt (NAME.HDR + NAME.RAW), names as written by "decompile"
+        //   NAME.HDR\*.ogg      speech bank rebuilt (NAME.HDR + NAME.SPD); NAME.SPD\ works too
         public static Dictionary<int, ModItem> CollectMods(CdFiles cd, Stream originalArchive, IEnumerable<string> modDirs)
         {
             var result = new Dictionary<int, ModItem>();
@@ -253,6 +255,9 @@ namespace Hwbt
 
                     if (parent.EndsWith(".ARC", StringComparison.OrdinalIgnoreCase) && ArcTools.IsImage(fname))
                         continue; // handled per folder below
+                    if ((parent.EndsWith(".HDR", StringComparison.OrdinalIgnoreCase) || parent.EndsWith(".SPD", StringComparison.OrdinalIgnoreCase)) &&
+                        (fname.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) || fname.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase)))
+                        continue; // sound / speech bank folders, handled below
                     if (byName.TryGetValue(fname, out e))
                     {
                         result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = rel, FilePath = f };
@@ -291,6 +296,38 @@ namespace Hwbt
                     byte[] arc = ArcTools.ImportTextures(baseArc, d, out n);
                     Log(string.Format("  {0}: {1} texture(s) injected", Path.GetFileName(d), n));
                     result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = d.Substring(root.Length), Data = arc };
+                }
+
+                // sound banks: BANK.HDR\*.wav -> BANK.HDR + BANK.RAW; speech banks: BANK.HDR\*.ogg (or BANK.SPD\) -> BANK.HDR + BANK.SPD
+                var bankDirs = Directory.GetDirectories(modDir, "*.HDR", SearchOption.AllDirectories)
+                    .Concat(Directory.GetDirectories(modDir, "*.SPD", SearchOption.AllDirectories));
+                foreach (var d in bankDirs)
+                {
+                    string bank = Path.GetFileNameWithoutExtension(d);
+                    CdEntry hdrEntry;
+                    if (!byName.TryGetValue(bank + ".HDR", out hdrEntry))
+                    {
+                        Log("  ! skipped folder (no such sound bank in archive): " + d.Substring(root.Length));
+                        continue;
+                    }
+                    byte[] hdr = ReadBlob(cd, originalArchive, hdrEntry.DataIndex);
+                    bool speech = Sound.IsSpeechBank(hdr);
+                    CdEntry dataEntry;
+                    if (!byName.TryGetValue(bank + (speech ? ".SPD" : ".RAW"), out dataEntry))
+                    {
+                        Log("  ! " + bank + ": bank has no " + (speech ? ".SPD" : ".RAW") + " data file - cannot rebuild");
+                        continue;
+                    }
+                    if (!Directory.GetFiles(d, speech ? "*.ogg" : "*.wav").Any()) continue;
+                    byte[] data = ReadBlob(cd, originalArchive, dataEntry.DataIndex);
+                    byte[] newHdr, newData;
+                    int n;
+                    if (speech) Sound.BuildSpeechBank(hdr, data, d, out newHdr, out newData, out n);
+                    else Sound.BuildSoundBank(hdr, data, d, out newHdr, out newData, out n);
+                    Log(string.Format("  {0}: {1} {2} replaced", bank, n, speech ? "speech take(s)" : "sound(s)"));
+                    string src = d.Substring(root.Length);
+                    result[hdrEntry.DataIndex] = new ModItem { DataIndex = hdrEntry.DataIndex, Source = src + " (HDR)", Data = newHdr };
+                    result[dataEntry.DataIndex] = new ModItem { DataIndex = dataEntry.DataIndex, Source = src + (speech ? " (SPD)" : " (RAW)"), Data = newData };
                 }
             }
             foreach (var m in result.Values.OrderBy(x => x.Source)) Log("  + " + m.Source);
