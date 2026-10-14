@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1
 * **Unpack & decompile**: full extraction of everything inside the game files. Textures go to PNG (optionally
   DDS), texts to TXT, sound banks (`.HDR/.RAW`) to WAV, and speech banks (`.HDR/.SPD`) to separate OGG files
   named after the phrases. Every other arcbank entry is written as `.bin`, with an `index.txt` per bank.

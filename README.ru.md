@@ -35,7 +35,7 @@ Hot Wheels: Beat That! разработала Eutechnyx (2007), издала Act
 
 ## Установка
 
-1. Скачайте `HWBT-Toolkit-v1.0.zip` со страницы [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
+1. Скачайте `HWBT-Toolkit-v1.1.zip` со страницы [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
    и распакуйте его в любую папку.
 2. Запустите `hwbt.exe`. Язык переключается в верхней части окна.
 
