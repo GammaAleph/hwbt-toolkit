@@ -37,7 +37,7 @@ This toolkit stands on the work of other people. If you enjoy it, please support
 
 ## Install
 
-1. Download `HWBT-Toolkit-v1.2.1.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
+1. Download `HWBT-Toolkit-v1.2.2.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
    and unzip it anywhere.
 2. Run `hwbt.exe`. The language selector is at the top of the window.
 
@@ -77,7 +77,9 @@ Examples:
 * `mods\NewEngine\16ANGELS_SND.HDR\h3_4k_2.wav`
 * `mods\Commentary\COMM.HDR\321GO.ogg`
 
-Use the file names that **Unpack and decompile** produces. PNG and TGA textures are compressed into the original
+Use the file names that **Unpack and decompile** produces. You can also copy a whole bank folder from its
+output (`arc\<BANK.ARC>\` with `textures\`) into `mods\`. Images that weren't changed are detected and left
+untouched, and `index.txt` / `entries\` are ignored. PNG and TGA textures are compressed into the original
 texture's format (DXT1/DXT3/A4R4G4B4…) with the same number of mip-maps, so the bank keeps its size. A `.dds` is
 stored exactly as it is (use it to pick a different format). Extra `.wav`/`.ogg` files that don't match an
 existing name are added to the bank as new sounds or phrases. The game only plays them if something

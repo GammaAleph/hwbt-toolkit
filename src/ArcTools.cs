@@ -216,8 +216,36 @@ namespace Hwbt
                 Archive.Log(string.Format("  ! {0}: DXT texture replaced by uncompressed {1} (4-8x more memory).", Path.GetFileName(file), nh.FormatName));
         }
 
-        // Applies every <name>.dds / .png / .tga in dir to the matching texture; returns the new bank bytes.
+        // Texture images of a bank folder: anywhere below it (e.g. the "textures\" sub-folder written by decompile),
+        // except inside font folders. If the same name exists twice, the most recently modified file wins.
+        public static List<string> TextureImageFiles(string bankDir)
+        {
+            var fontDirs = FindFontDirs(bankDir).Select(d => Path.GetFullPath(d).TrimEnd('\\') + "\\").ToList();
+            return Directory.GetFiles(bankDir, "*", SearchOption.AllDirectories)
+                .Where(f => IsImage(f) && !fontDirs.Any(fd => Path.GetFullPath(f).StartsWith(fd, StringComparison.OrdinalIgnoreCase)))
+                .GroupBy(f => Path.GetFileNameWithoutExtension(f), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(File.GetLastWriteTimeUtc).First())
+                .ToList();
+        }
+
+        // True when an image/DDS holds exactly the pixels/bytes of the original texture (copied, not edited).
+        static bool IsUnchanged(string file, byte[] origEntry)
+        {
+            try
+            {
+                if (file.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
+                    return Tex.FromDds(File.ReadAllBytes(file), TexHeader.Read(origEntry, 0)).SequenceEqual(origEntry);
+                int w, h, ow, oh;
+                byte[] px = TexImage.LoadBgra(file, out w, out h);
+                byte[] opx = TexImage.DecodeBgra(origEntry, out ow, out oh);
+                return w == ow && h == oh && px.SequenceEqual(opx);
+            }
+            catch { return false; }
+        }
+
+        // Applies the texture images under dir to the matching textures; returns the new bank bytes.
         // PNG/TGA are encoded into the original format with the original mip count; DDS is taken as-is.
+        // Images identical to the original are left alone (no needless DXT re-compression).
         public static byte[] ImportTextures(byte[] arc, string dir, out int count)
         {
             var b = ArcBank.Parse(arc);
@@ -225,15 +253,16 @@ namespace Hwbt
             var byName = new Dictionary<string, ArcEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var kv in TextureFileNames(b)) byName[kv.Value] = kv.Key;
             count = 0;
-            foreach (var f in Directory.GetFiles(dir))
+            int unchanged = 0;
+            foreach (var f in TextureImageFiles(dir))
             {
-                if (!IsImage(f)) continue;
                 ArcEntry e;
                 if (!byName.TryGetValue(Path.GetFileNameWithoutExtension(f), out e))
                 {
                     Archive.Log("  ! no texture named " + Path.GetFileNameWithoutExtension(f) + " in this bank");
                     continue;
                 }
+                if (IsUnchanged(f, b.GetData(e))) { unchanged++; continue; }
                 var orig = TexHeader.Read(b.Raw, b.AbsOffset(e));
                 byte[] payload = f.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)
                     ? Tex.FromDds(File.ReadAllBytes(f), orig)
@@ -246,6 +275,7 @@ namespace Hwbt
                 b.SetData(e, payload);
                 count++;
             }
+            if (unchanged > 0) Archive.Log(string.Format("  i {0} texture(s) identical to the original - left as they are", unchanged));
             if (b.Raw.Length > originalSize * 2 && b.Raw.Length > 8 << 20)
                 Archive.Log(string.Format("  ! bank grew from {0:N1} MB to {1:N1} MB - if the game crashes while loading it, use smaller or compressed textures.",
                     originalSize / 1048576.0, b.Raw.Length / 1048576.0));

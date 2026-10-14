@@ -254,8 +254,8 @@ namespace Hwbt
                     string fname = Path.GetFileName(f);
                     CdEntry e;
 
-                    if (parent.EndsWith(".ARC", StringComparison.OrdinalIgnoreCase) && ArcTools.IsImage(fname))
-                        continue; // handled per folder below
+                    if (HasArcAncestor(f, modDir))
+                        continue; // anything inside a NAME.ARC\ folder (textures, fonts, decompile leftovers) is handled per bank below
                     if (ArcTools.IsFontDir(Path.GetDirectoryName(f)))
                         continue; // font folders (font.txt + atlas) inside NAME.ARC\, handled below
                     if ((parent.EndsWith(".HDR", StringComparison.OrdinalIgnoreCase) || parent.EndsWith(".SPD", StringComparison.OrdinalIgnoreCase)) &&
@@ -283,6 +283,7 @@ namespace Hwbt
                 }
 
                 int itemsBefore = result.Count;
+                bool recognised = false; // something in the mod matched the game, even if it turned out unchanged
                 Func<string, string> relOf = p =>
                 {
                     string full = Path.GetFullPath(p).TrimEnd('\\') + "\\";
@@ -301,25 +302,37 @@ namespace Hwbt
                         Log("  ! skipped folder (no such bank in archive): " + relOf(d));
                         continue;
                     }
-                    bool hasImages = Directory.GetFiles(d).Any(ArcTools.IsImage);
+                    var images = ArcTools.TextureImageFiles(d);
+                    bool hasImages = images.Count > 0;
                     bool hasFonts = ArcTools.HasFontFolders(d);
+                    // files that can't go back into a bank (e.g. index.txt / entries\*.bin copied from decompile)
+                    var fontRoots = ArcTools.FindFontDirs(d).Select(x => Path.GetFullPath(x).TrimEnd('\\') + "\\").ToList();
+                    int ignored = Directory.GetFiles(d, "*", SearchOption.AllDirectories).Count(x =>
+                        !ArcTools.IsImage(x) && !Path.GetFileName(x).Equals("index.txt", StringComparison.OrdinalIgnoreCase) &&
+                        !fontRoots.Any(fr => Path.GetFullPath(x).StartsWith(fr, StringComparison.OrdinalIgnoreCase)));
+                    if (ignored > 0)
+                        Log(string.Format("  i {0}: {1} other file(s) ignored (raw entries such as entries\\*.bin cannot be imported)", relOf(d), ignored));
                     if (!hasImages && !hasFonts) continue;
+                    recognised = true;
                     ModItem prev;
                     byte[] arc = result.TryGetValue(e.DataIndex, out prev)
                         ? (prev.Data ?? File.ReadAllBytes(prev.FilePath))
                         : ReadBlob(cd, originalArchive, e.DataIndex);
-                    int n;
+                    int n, changes = 0;
                     if (hasImages)
                     {
                         arc = ArcTools.ImportTextures(arc, d, out n);
                         Log(string.Format("  {0}: {1} texture(s) injected", Path.GetFileName(d.TrimEnd('\\')), n));
+                        changes += n;
                     }
                     if (hasFonts)
                     {
                         arc = ArcTools.ImportFonts(arc, d, out n);
                         Log(string.Format("  {0}: {1} font(s) rebuilt", Path.GetFileName(d.TrimEnd('\\')), n));
+                        changes += n;
                     }
-                    result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = relOf(d), Data = arc };
+                    // a folder whose images all equal the original changes nothing - don't rewrite the bank
+                    if (changes > 0 || prev != null) result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = relOf(d), Data = arc };
                 }
 
                 // <name>.font folders that are not inside a NAME.ARC folder: apply them to every bank that has a font
@@ -359,7 +372,7 @@ namespace Hwbt
                     result[dataEntry.DataIndex] = new ModItem { DataIndex = dataEntry.DataIndex, Source = src + (speech ? " (SPD)" : " (RAW)"), Data = newData };
                 }
 
-                if (result.Count == itemsBefore)
+                if (result.Count == itemsBefore && !recognised)
                 {
                     Log("  ! " + Path.GetFileName(modDir.TrimEnd('\\')) + ": nothing in this mod matches the game files. Expected for example:");
                     Log("      <mod>\\TITLE.OGG   <mod>\\TEXT0000.txt   <mod>\\<BANK>.ARC\\<texture>.png");

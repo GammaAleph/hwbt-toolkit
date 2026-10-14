@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.2
+* Fixed: textures in a sub-folder of a bank folder were skipped. This happens when the bank folder from
+  *Unpack and decompile* (`<BANK.ARC>\textures\*.png`) is copied into a mod. Texture images are now found
+  anywhere inside `<BANK.ARC>\`.
+* Images that are identical to the original texture are left as they are, so copying a whole folder only
+  re-compresses the textures you actually edited.
+* `index.txt` and `entries\*.bin` copied from decompile are ignored, with one line in the log, instead of a
+  warning per file.
+
 ## v1.2.1
 * Fixed: a font folder was silently ignored when it was not inside a `<BANK.ARC>\` folder, or when the mod
   folder itself was the bank folder (`mods\A_MAINMENU_FONTSARCHIVE.ARC\`). Now:
