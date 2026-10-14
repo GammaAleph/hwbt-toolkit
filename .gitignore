@@ -6,6 +6,6 @@ hwbt.exe
 community/*
 !community/README.txt
 
-# mods may contain game assets - only the empty example is tracked
+# mods may contain game assets - only the empty template is tracked
 mods/*
-!mods/_example/
+!mods/_template/

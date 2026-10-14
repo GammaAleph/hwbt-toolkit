@@ -170,7 +170,7 @@ namespace Hwbt
                 var atlas = Directory.GetFiles(fd).Where(f => IsImage(f) && Path.GetFileNameWithoutExtension(f).Equals("atlas", StringComparison.OrdinalIgnoreCase))
                                      .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
                 byte[] tex = null;
-                if (atlas != null)
+                if (atlas != null && !IsUnchanged(atlas, orig.Texture)) // an unedited atlas keeps the original texture
                 {
                     var oh = orig.TexInfo;
                     tex = atlas.EndsWith(".dds", StringComparison.OrdinalIgnoreCase) ? Tex.FromDds(File.ReadAllBytes(atlas), oh) : TexImage.FromImage(atlas, oh);
@@ -189,6 +189,7 @@ namespace Hwbt
                     throw new InvalidDataException(string.Format("{0}: font is {1:N0} bytes - an arcbank entry can hold at most 16 MB (use a smaller atlas)", name, payload.Length));
                 if (font.Glyphs.Count != orig.Glyphs.Count)
                     Archive.Log(string.Format("  i {0}: {1} -> {2} glyphs", name, orig.Glyphs.Count, font.Glyphs.Count));
+                if (payload.SequenceEqual(b.GetData(e))) continue; // copied, not edited
                 b.SetData(e, payload);
                 count++;
             }

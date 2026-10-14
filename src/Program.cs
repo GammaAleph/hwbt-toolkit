@@ -63,6 +63,10 @@ namespace Hwbt
                             Console.WriteLine("Imported {0} font(s) into {1}", n, outArc);
                             return 0;
                         }
+                    case "make-template":
+                        ModTemplate.Create(Arg(args, 1));
+                        Console.WriteLine("Mod template written to " + args[1]);
+                        return 0;
                     case "make-soundbank": return Cmd.MakeBank(Arg(args, 1), Arg(args, 2), args.Length > 3 ? args[3] : null, false);
                     case "make-speechbank": return Cmd.MakeBank(Arg(args, 1), Arg(args, 2), Arg(args, 3), true);
                     case "survey": return Cmd.Survey(Arg(args, 1));
@@ -114,6 +118,7 @@ Archive:
 
 Whole game (Data + lData):
   install-mods   <gameDir> <modsRoot> apply every sub-folder of modsRoot as a mod
+  make-template  <dir>                write an empty mod template (Data\ + lData\, decompile layout)
   uninstall-mods <gameDir>            revert both archives to original
 
 Texts (.LDA):

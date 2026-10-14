@@ -59,49 +59,64 @@ The toolkit requires .NET Framework 4.5 or later, which is built into Windows 8,
 | Install Patch V1 / V2          | downloads the author's patch (SHA-256 verified) and runs its installer |
 | Remove patch                   | runs the author's restore script for the installed patch            |
 
-### Mod folder layout
+### Making a mod: the template
 
-Each sub-folder of `mods\` is one mod. Folders whose names start with `_` are ignored.
+Each sub-folder of `mods\` is one mod. Folders whose names start with `_` are never installed. The toolkit keeps
+an empty **`mods\_template\`** with a `Data\` and an `lData\` part, laid out exactly like the output of
+**Unpack and decompile**. Copy it, rename the copy, and put the files you changed into it:
+
+```
+mods\MyMod\
+  Data\                                    <- high detail (...\Hot Wheels\Data)
+    arc\<BANK.ARC>\textures\<name>.png     textures (.png / .tga / .dds)
+    arc\<BANK.ARC>\fonts\<name>.font\      fonts (font.txt and/or atlas.png)
+    texts\TEXTxxyy.txt                     texts
+    sounds\<BANK>\<name>.wav               sound effects
+    speech\<BANK>\<name>.ogg               commentator
+    music\<TRACK>.OGG                      music
+    files\<NAME>                           any archive file, replaced as a whole
+  lData\                                   <- low detail (...\Hot Wheels\lData), same layout
+  <anything outside Data\ and lData\>      <- installed into both
+```
+
+Because the layout matches the decompile output, you can also copy **whole folders** from it, even its complete
+`Data\decompiled\` and `Data\files\`. Files identical to the game are detected and skipped, so only what you
+edited is installed. The log reports `N file(s)/bank(s) identical to the original game data - skipped`.
+
+### What differs between Data and lData
+
+The game keeps two copies of its data, and a mod part outside `Data\`/`lData\` is installed into both. A full
+comparison of the PC release shows:
+
+| Files | Data vs lData |
+|---|---|
+| 288 of 1820 `.ARC` banks | **different**: low-detail models and textures with other names, sizes and formats |
+| 17 zone sound banks (`ZONE*.HDR/.RAW`) | **different**: other sounds and sample rates |
+| music `.OGG`, commentary `.SPD` | the same audio (only the Ogg container serials differ) |
+| texts, shaders, videos, car engine sounds | identical |
+
+For example, `lData\BRUTALISTIC_LOD0_GRA.ARC` has `Brutalistic-body-D` (DXT3), while `Data` has
+`Brutalistic-body-DA` (A4R4G4B4). So textures, models and zone sounds need their own `lData\` version; texts and
+music can go into the mod folder itself. When images don't match a bank, the log lists the textures the bank
+really has. The detail level the game uses is chosen in `DisplayConfig.exe`.
+
+### Short layout (also accepted)
 
 | Put this in the mod folder                    | Result                                          |
 |-----------------------------------------------|-------------------------------------------------|
 | `NAME.EXT` (any archive file)                 | replaces that file (`TITLE.OGG`, `CAR.ARC`, …)  |
 | `TEXT0000.txt`                                | compiled into `TEXT0000.LDA`                    |
-| folder `NAME.ARC\` with `*.png` `*.tga` `*.dds` | textures injected into the original bank     |
+| folder `NAME.ARC\` with `*.png` `*.tga` `*.dds` (any sub-folder) | textures injected into the original bank |
 | folder `NAME.ARC\FONT.font\` (`font.txt` and/or `atlas.png`) | font rebuilt (glyphs, spacing, atlas)  |
+| folder `FONT.font\` outside a bank folder     | font rebuilt in **every** bank that has it      |
 | folder `NAME.HDR\` with `*.wav`               | sound bank rebuilt (`NAME.HDR` + `NAME.RAW`)    |
 | folder `NAME.HDR\` with `*.ogg`               | speech bank rebuilt (`NAME.HDR` + `NAME.SPD`)   |
 
-Examples:
-* `mods\BlueCar\16ANGELS_LOD0_GRA.ARC\16AngelsBodyDA.png`
-* `mods\NewEngine\16ANGELS_SND.HDR\h3_4k_2.wav`
-* `mods\Commentary\COMM.HDR\321GO.ogg`
-
-Use the file names that **Unpack and decompile** produces. You can also copy a whole bank folder from its
-output (`arc\<BANK.ARC>\` with `textures\`) into `mods\`. Images that weren't changed are detected and left
-untouched, and `index.txt` / `entries\` are ignored. PNG and TGA textures are compressed into the original
-texture's format (DXT1/DXT3/A4R4G4B4…) with the same number of mip-maps, so the bank keeps its size. A `.dds` is
-stored exactly as it is (use it to pick a different format). Extra `.wav`/`.ogg` files that don't match an
-existing name are added to the bank as new sounds or phrases. The game only plays them if something
-references them, though.
-The formats are described in [docs/FORMATS.md](docs/FORMATS.md).
-
-### Data and lData (high / low detail)
-
-The game has two copies of its data: `Data\` (high detail) and `lData\` (low detail). A mod is installed into
-**both**. Most files have the same names in both, but many low-detail **arcbanks contain different textures**.
-For example, `lData\BRUTALISTIC_LOD0_GRA.ARC` has only `Brutalistic-body-D` and `env`, while the `Data` version has
-`Brutalistic-body-DA` and six more. For such banks, give the low-detail version its own part:
-
-```
-mods\MyCar\BRUTALISTIC_LOD0_GRA.ARC\Brutalistic-body-DA.png        <- both (here: only Data has it)
-mods\MyCar\lData\BRUTALISTIC_LOD0_GRA.ARC\Brutalistic-body-D.png   <- only lData
-mods\MyCar\Data\...                                                <- only Data
-```
-
-Export the low-detail textures from `lData\` with *Unpack and decompile* (its `lData\` output). If images don't match
-a bank, the log lists the textures the bank really has. The detail level the game uses is chosen in
-`DisplayConfig.exe`.
+PNG and TGA textures are compressed into the original texture's format (DXT1/DXT3/A4R4G4B4…) with the same number
+of mip-maps, so the bank keeps its size. A `.dds` is stored exactly as it is (use it to pick a different format).
+Extra `.wav`/`.ogg` files that don't match an existing name are added to the bank as new sounds or phrases, but
+the game only plays them if something references them. The formats are described in
+[docs/FORMATS.md](docs/FORMATS.md).
 
 ### Fonts
 

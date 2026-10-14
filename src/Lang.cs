@@ -73,6 +73,8 @@ namespace Hwbt
             { "askUnpackDir", new[] { "Where to unpack? (Data and lData sub-folders will be created)", "Куда распаковать архив? (будут созданы подпапки Data и lData)" } },
             { "pickArc", new[] { "Select .ARC files (from the unpacked archive)", "Выберите .ARC файлы (из распакованного архива)" } },
             { "askTexDir", new[] { "Where to save the textures?", "Куда сохранить текстуры?" } },
+            { "templateCreated", new[] { "Mod template created: {0} (copy it, rename the copy and put your files into Data\\ / lData\\)",
+                                         "Создан шаблон мода: {0} (скопируйте, переименуйте копию и кладите файлы в Data\\ / lData\\)" } },
             { "fontsExported", new[] { "{0}: {1} font(s)", "{0}: шрифтов: {1}" } },
             { "fontHint", new[] {
                 "To mod: copy <BANK.ARC>\\<name>.font\\ into mods\\<YourMod>\\ and edit font.txt and/or atlas.png there.",

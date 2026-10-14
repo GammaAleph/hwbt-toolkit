@@ -93,9 +93,14 @@ namespace Hwbt
                     string wav;
                     if (wavs.TryGetValue(names[i], out wav))
                     {
-                        pcms.Add(LoadWavFor(wav, item));
+                        uint start = BitConverter.ToUInt32(item, 24), size = BitConverter.ToUInt32(item, 32);
+                        byte[] before = (byte[])item.Clone();
+                        byte[] pcm = LoadWavFor(wav, item);
+                        pcms.Add(pcm);
                         wavs.Remove(names[i]);
-                        replaced++;
+                        // count only real changes (a .wav copied straight from decompile gives back the same data)
+                        if (!before.SequenceEqual(item) || templateRaw == null || !pcm.SequenceEqual(templateRaw.Skip((int)start).Take((int)size)))
+                            replaced++;
                     }
                     else
                     {
@@ -298,9 +303,10 @@ namespace Hwbt
             {
                 string f;
                 if (!files.TryGetValue(names[s], out f)) continue;
-                streams[s] = ReadOgg(f);
+                var take = ReadOgg(f);
+                if (!take.SequenceEqual(streams[s])) replaced++; // count only real changes
+                streams[s] = take;
                 files.Remove(names[s]);
-                replaced++;
             }
             var items = new List<byte[]>();
             for (int i = 0; i < phrases; i++) items.Add(templateHdr.Skip(SpeechHeader + i * SpeechItem).Take(SpeechItem).ToArray());

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+* **Mods in the decompile layout**: a mod can use exactly the structure that *Unpack and decompile* writes,
+  with a `Data\` and an `lData\` part: `arc\<BANK.ARC>\textures\`, `arc\<BANK.ARC>\fonts\`, `texts\`,
+  `sounds\<BANK>\*.wav`, `speech\<BANK>\*.ogg`, `music\`, `files\`. Sound and speech folders no longer need
+  to be renamed to `<BANK>.HDR`.
+* **Unchanged files are skipped everywhere**: whole files (`files\`, `music\`), texts, sound and speech banks,
+  fonts and font atlases are compared with the game. Only what was edited is installed, so complete
+  decompile folders can be copied into a mod. The log shows how many were skipped.
+* **Mod template**: `mods\_template\` (`Data\` + `lData\` with `arc`, `texts`, `sounds`, `speech`, `music` and
+  `files` folders and bilingual instructions) is created automatically. It replaces `mods\_example`.
+  CLI: `make-template`.
+* The log now counts only sounds and speech takes that really changed, and no longer prints "0 … injected" /
+  "0 font(s) rebuilt" lines or warnings about `entries\` copied from decompile.
+* Documented which files differ between `Data` and `lData`: 288 `.ARC` banks and 17 zone sound banks. Music,
+  commentary, texts, shaders, videos and engine sounds are the same.
+
 ## v1.2.3
 * **Data / lData parts in mods**: `mods\X\Data\...` is installed only into `Data\`, `mods\X\lData\...` only into
   `lData\`; everything else goes into both. Needed because many low-detail banks contain different textures

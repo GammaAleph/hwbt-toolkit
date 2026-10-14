@@ -426,6 +426,16 @@ namespace Hwbt
 
         void RefreshMods()
         {
+            // keep a mods\_template\ (Data\ + lData\ layout) next to the user's mods
+            try
+            {
+                if (!string.IsNullOrEmpty(modsBox.Text) && (Directory.Exists(modsBox.Text) || modsBox.Text == Path.Combine(ToolDir, "mods")))
+                {
+                    Directory.CreateDirectory(modsBox.Text);
+                    if (ModTemplate.Ensure(modsBox.Text)) Log(Lang.F("templateCreated", Path.Combine(modsBox.Text, ModTemplate.FolderName)));
+                }
+            }
+            catch (Exception ex) { Log(Lang.T("error") + ex.Message); }
             modList.Items.Clear();
             foreach (var d in Archive.ModFolders(modsBox.Text)) modList.Items.Add(Path.GetFileName(d), true);
         }

@@ -270,6 +270,7 @@ namespace Hwbt
                 Func<string, bool> keep = p => !excluded.Any(x => (Path.GetFullPath(p).TrimEnd('\\') + "\\").StartsWith(x, StringComparison.OrdinalIgnoreCase));
                 string root = Path.GetFullPath(modDir).TrimEnd('\\') + "\\";
                 bool hasOwnContent = Directory.GetFiles(modDir, "*", SearchOption.AllDirectories).Any(keep);
+                int unchanged = 0; // files identical to the original game data (skipped)
                 foreach (var f in Directory.GetFiles(modDir, "*", SearchOption.AllDirectories).Where(keep))
                 {
                     string rel = Path.GetFullPath(f).Substring(root.Length);
@@ -281,11 +282,13 @@ namespace Hwbt
                         continue; // anything inside a NAME.ARC\ folder (textures, fonts, decompile leftovers) is handled per bank below
                     if (ArcTools.IsFontDir(Path.GetDirectoryName(f)))
                         continue; // font folders (font.txt + atlas) inside NAME.ARC\, handled below
-                    if ((parent.EndsWith(".HDR", StringComparison.OrdinalIgnoreCase) || parent.EndsWith(".SPD", StringComparison.OrdinalIgnoreCase)) &&
+                    if (IsSoundBankDir(Path.GetDirectoryName(f), byName) &&
                         (fname.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) || fname.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase)))
-                        continue; // sound / speech bank folders, handled below
+                        continue; // sound / speech bank folders (BANK.HDR\ or decompile's sounds\BANK\, speech\BANK\), handled below
                     if (byName.TryGetValue(fname, out e))
                     {
+                        // whole files copied from "files\" of the decompile output are usually unchanged - skip those
+                        if (SameAsOriginal(cd, originalArchive, e.DataIndex, f)) { unchanged++; continue; }
                         result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = rel, FilePath = f };
                         continue;
                     }
@@ -293,10 +296,13 @@ namespace Hwbt
                         byName.TryGetValue(Path.GetFileNameWithoutExtension(fname) + ".LDA", out e))
                     {
                         var lda = Lda.FromText(File.ReadAllText(f));
-                        var orig = Lda.Parse(ReadBlob(cd, originalArchive, e.DataIndex));
+                        byte[] origLda = ReadBlob(cd, originalArchive, e.DataIndex);
+                        var orig = Lda.Parse(origLda);
                         if (lda.Strings.Count != orig.Strings.Count)
                             Log(string.Format("  ! {0}: {1} lines, original has {2} - the game may misbehave", rel, lda.Strings.Count, orig.Strings.Count));
-                        result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = rel, Data = lda.Build() };
+                        byte[] built = lda.Build();
+                        if (built.SequenceEqual(origLda)) { unchanged++; continue; }
+                        result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = rel, Data = built };
                         continue;
                     }
                     if (fname.StartsWith("readme", StringComparison.OrdinalIgnoreCase) || fname.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
@@ -332,6 +338,7 @@ namespace Hwbt
                     var fontRoots = ArcTools.FindFontDirs(d).Select(x => Path.GetFullPath(x).TrimEnd('\\') + "\\").ToList();
                     int ignored = Directory.GetFiles(d, "*", SearchOption.AllDirectories).Count(x =>
                         !ArcTools.IsImage(x) && !Path.GetFileName(x).Equals("index.txt", StringComparison.OrdinalIgnoreCase) &&
+                        Path.GetFullPath(x).IndexOf(@"\entries\", StringComparison.OrdinalIgnoreCase) < 0 && // decompile output, cannot be imported
                         !fontRoots.Any(fr => Path.GetFullPath(x).StartsWith(fr, StringComparison.OrdinalIgnoreCase)));
                     if (ignored > 0)
                         Log(string.Format("  i {0}: {1} other file(s) ignored (raw entries such as entries\\*.bin cannot be imported)", relOf(d), ignored));
@@ -346,7 +353,7 @@ namespace Hwbt
                     {
                         int missing;
                         arc = ArcTools.ImportTextures(arc, d, out n, out missing, !withOwnPart.Contains(modDir));
-                        if (n > 0 || !withOwnPart.Contains(modDir))
+                        if (n > 0)
                             Log(string.Format("  {0}: {1} texture(s) injected", Path.GetFileName(d.TrimEnd('\\')), n));
                         changes += n;
                         bool isDataPart = GameDataDirs.Any(g => g.Equals(Path.GetFileName(modDir.TrimEnd('\\')), StringComparison.OrdinalIgnoreCase));
@@ -357,7 +364,7 @@ namespace Hwbt
                     if (hasFonts)
                     {
                         arc = ArcTools.ImportFonts(arc, d, out n);
-                        Log(string.Format("  {0}: {1} font(s) rebuilt", Path.GetFileName(d.TrimEnd('\\')), n));
+                        if (n > 0) Log(string.Format("  {0}: {1} font(s) rebuilt", Path.GetFileName(d.TrimEnd('\\')), n));
                         changes += n;
                     }
                     // a folder whose images all equal the original changes nothing - don't rewrite the bank
@@ -371,10 +378,12 @@ namespace Hwbt
                 if (orphanFonts.Count > 0) ApplyFontsEverywhere(cd, originalArchive, orphanFonts, result, relOf);
 
                 // sound banks: BANK.HDR\*.wav -> BANK.HDR + BANK.RAW; speech banks: BANK.HDR\*.ogg (or BANK.SPD\) -> BANK.HDR + BANK.SPD
-                var bankDirs = dirsNamed(".HDR").Concat(dirsNamed(".SPD"));
+                var bankDirs = dirsNamed(".HDR").Concat(dirsNamed(".SPD"))
+                    .Concat(Directory.GetDirectories(modDir, "*", SearchOption.AllDirectories).Where(x => keep(x) && IsDecompiledSoundDir(x, byName)));
                 foreach (var d in bankDirs)
                 {
-                    string bank = Path.GetFileNameWithoutExtension(d.TrimEnd('\\'));
+                    string dn = Path.GetFileName(d.TrimEnd('\\'));
+                    string bank = dn.EndsWith(".HDR", StringComparison.OrdinalIgnoreCase) || dn.EndsWith(".SPD", StringComparison.OrdinalIgnoreCase) ? dn.Substring(0, dn.Length - 4) : dn;
                     CdEntry hdrEntry;
                     if (!byName.TryGetValue(bank + ".HDR", out hdrEntry))
                     {
@@ -395,12 +404,17 @@ namespace Hwbt
                     int n;
                     if (speech) Sound.BuildSpeechBank(hdr, data, d, out newHdr, out newData, out n);
                     else Sound.BuildSoundBank(hdr, data, d, out newHdr, out newData, out n);
+                    recognised = true;
+                    if (newHdr.SequenceEqual(hdr) && newData.SequenceEqual(data)) { unchanged++; continue; } // copied, not edited
                     Log(string.Format("  {0}: {1} {2} replaced", bank, n, speech ? "speech take(s)" : "sound(s)"));
                     string src = relOf(d);
                     result[hdrEntry.DataIndex] = new ModItem { DataIndex = hdrEntry.DataIndex, Source = src + " (HDR)", Data = newHdr };
                     result[dataEntry.DataIndex] = new ModItem { DataIndex = dataEntry.DataIndex, Source = src + (speech ? " (SPD)" : " (RAW)"), Data = newData };
                 }
 
+                if (unchanged > 0)
+                    Log(string.Format("  i {0}: {1} file(s)/bank(s) identical to the original game data - skipped", Path.GetFileName(modDir.TrimEnd('\\')), unchanged));
+                if (unchanged > 0) recognised = true;
                 if (result.Count == itemsBefore && !recognised && hasOwnContent)
                 {
                     Log("  ! " + Path.GetFileName(modDir.TrimEnd('\\')) + ": nothing in this mod matches the game files. Expected for example:");
@@ -410,6 +424,29 @@ namespace Hwbt
             }
             foreach (var m in result.Values.OrderBy(x => x.Source)) Log("  + " + m.Source);
             return result;
+        }
+
+        // True when the mod file has exactly the original content of that archive entry.
+        static bool SameAsOriginal(CdFiles cd, Stream originalArchive, int dataIndex, string file)
+        {
+            if (new FileInfo(file).Length != cd.FileSizes[dataIndex]) return false;
+            return File.ReadAllBytes(file).SequenceEqual(ReadBlob(cd, originalArchive, dataIndex));
+        }
+
+        // NAME.HDR\ / NAME.SPD\, or a folder written by decompile: sounds\<BANK>\ or speech\<BANK>\.
+        static bool IsSoundBankDir(string dir, Dictionary<string, CdEntry> byName)
+        {
+            string n = Path.GetFileName(dir.TrimEnd('\\'));
+            return n.EndsWith(".HDR", StringComparison.OrdinalIgnoreCase) || n.EndsWith(".SPD", StringComparison.OrdinalIgnoreCase)
+                || IsDecompiledSoundDir(dir, byName);
+        }
+
+        static bool IsDecompiledSoundDir(string dir, Dictionary<string, CdEntry> byName)
+        {
+            string parent = Path.GetFileName(Path.GetDirectoryName(dir.TrimEnd('\\')) ?? "");
+            string n = Path.GetFileName(dir.TrimEnd('\\'));
+            return (parent.Equals("sounds", StringComparison.OrdinalIgnoreCase) || parent.Equals("speech", StringComparison.OrdinalIgnoreCase))
+                && byName.ContainsKey(n + ".HDR");
         }
 
         // "Data" or "lData" for a data folder path (used to pick the matching part of a mod).
