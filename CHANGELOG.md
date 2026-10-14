@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2
+* **New buttons**: "Fonts ARC → PNG/TXT…" and "Sounds HDR → WAV/OGG…". "Textures ARC → PNG/TGA…" now writes only
+  images (PNG, or TGA for textures that were TGA). All three export straight into `<BANK.ARC>\` / `<BANK>.HDR\`
+  folders, the same layout a mod uses. Renamed "Install / uninstall mods" (unchecked mods are removed) and
+  "Unpack and decompile…".
+* **Fonts**: the bitmap fonts (entry type 0x0C in `*_FONTSARCHIVE.ARC` and `GLOBALMENUASSETS*.ARC`, 78 fonts)
+  are exported as `<name>.font\` folders: `font.txt` (glyph rectangles, character codes, width, advance and
+  kerning pairs) plus `atlas.png`. Put such a folder into `mods\X\<BANK.ARC>\` to rebuild the font. Glyphs can
+  be added (up to 253), and the atlas can be resized: `atlassize` keeps the coordinates valid when only the
+  image is upscaled. Unpack and decompile writes `fonts\` instead of `.bin` for them. CLI: `font-export`,
+  `font-import`.
+
 ## v1.1.1
 * Unpack & decompile also writes the music: `decompiled\music\*.OGG` plus an `index.txt` that says where each
   track plays (main menu / race / results screen, from the `MUSICARC`, `IGMUSICARC` and `RESULTSMUSIC` indexes).

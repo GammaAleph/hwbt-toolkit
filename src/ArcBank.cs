@@ -127,6 +127,7 @@ namespace Hwbt
                 case 0x01: return "Texture";
                 case 0x02: return "Material";
                 case 0x09: return "Mesh";
+                case 0x0c: return "Font";
                 case 0x0f: return "IndexBuffer";
                 case 0x10: return "VertexBuffer";
                 case 0x11: return "LightmapTexture";

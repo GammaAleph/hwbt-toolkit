@@ -2,7 +2,7 @@
 
 [Русская версия](README.ru.md)
 
-HWBT Toolkit unpacks and repacks the game's archives, converts textures to and from PNG/DDS, converts text
+HWBT Toolkit unpacks and repacks the game's archives, converts textures to and from PNG/TGA/DDS, converts fonts, text
 tables, and installs mods with automatic rollback. It can also install the **Beat That! Revival** community
 patches V1 and V2. The interface is available in English and Russian.
 
@@ -37,7 +37,7 @@ This toolkit stands on the work of other people. If you enjoy it, please support
 
 ## Install
 
-1. Download `HWBT-Toolkit-v1.1.1.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
+1. Download `HWBT-Toolkit-v1.2.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
    and unzip it anywhere.
 2. Run `hwbt.exe`. The language selector is at the top of the window.
 
@@ -47,13 +47,15 @@ The toolkit requires .NET Framework 4.5 or later, which is built into Windows 8,
 
 | Button                         | What it does                                                         |
 |--------------------------------|----------------------------------------------------------------------|
-| Install mods                   | installs every checked mod from `mods\` into `Data\` and `lData\`    |
+| Install / uninstall mods       | installs every checked mod from `mods\` into `Data\` and `lData\`; unchecked mods are removed |
 | Restore original               | reverts both archives byte-for-byte                                  |
 | Unpack archive…                | extracts all 2,141 game files                                        |
-| Unpack & decompile…            | extracts everything and unpacks the files' contents: textures → PNG/TGA, texts → TXT, sounds → WAV, speech and music → OGG, all other `.ARC` entries → `.bin` + `index.txt` |
-| ☐ Convert all textures to PNG  | textures named `*.tga` in the game are exported as TGA unless this is checked |
-| Textures ARC → PNG/DDS…        | exports the textures of `.ARC` banks                                 |
+| Unpack and decompile…          | extracts everything and unpacks the files' contents: textures → PNG/TGA, fonts → PNG/TXT, texts → TXT, sounds → WAV, speech and music → OGG, all other `.ARC` entries → `.bin` + `index.txt` |
+| Textures ARC → PNG/TGA…        | exports the textures of selected `.ARC` banks into `<BANK.ARC>\`     |
+| Fonts ARC → PNG/TXT…           | exports the fonts of selected `.ARC` banks into `<BANK.ARC>\<name>.font\` |
+| Sounds HDR → WAV/OGG…          | exports selected sound banks (`.wav`) and speech banks (`.ogg`) into `<BANK>.HDR\` |
 | Texts LDA → TXT…               | converts string tables to editable text                              |
+| ☐ Convert all textures to PNG  | textures named `*.tga` in the game are exported as TGA unless this is checked |
 | Install Patch V1 / V2          | downloads the author's patch (SHA-256 verified) and runs its installer |
 | Remove patch                   | runs the author's restore script for the installed patch            |
 
@@ -66,6 +68,7 @@ Each sub-folder of `mods\` is one mod. Folders whose names start with `_` are ig
 | `NAME.EXT` (any archive file)                 | replaces that file (`TITLE.OGG`, `CAR.ARC`, …)  |
 | `TEXT0000.txt`                                | compiled into `TEXT0000.LDA`                    |
 | folder `NAME.ARC\` with `*.png` `*.tga` `*.dds` | textures injected into the original bank     |
+| folder `NAME.ARC\FONT.font\` (`font.txt` and/or `atlas.png`) | font rebuilt (glyphs, spacing, atlas)  |
 | folder `NAME.HDR\` with `*.wav`               | sound bank rebuilt (`NAME.HDR` + `NAME.RAW`)    |
 | folder `NAME.HDR\` with `*.ogg`               | speech bank rebuilt (`NAME.HDR` + `NAME.SPD`)   |
 
@@ -74,12 +77,28 @@ Examples:
 * `mods\NewEngine\16ANGELS_SND.HDR\h3_4k_2.wav`
 * `mods\Commentary\COMM.HDR\321GO.ogg`
 
-Use the file names that **Unpack & decompile** produces. PNG and TGA textures are compressed into the original
+Use the file names that **Unpack and decompile** produces. PNG and TGA textures are compressed into the original
 texture's format (DXT1/DXT3/A4R4G4B4…) with the same number of mip-maps, so the bank keeps its size. A `.dds` is
 stored exactly as it is (use it to pick a different format). Extra `.wav`/`.ogg` files that don't match an
 existing name are added to the bank as new sounds or phrases. The game only plays them if something
 references them, though.
 The formats are described in [docs/FORMATS.md](docs/FORMATS.md).
+
+### Fonts
+
+The menu and HUD fonts are bitmap fonts in `*_FONTSARCHIVE.ARC` and `GLOBALMENUASSETS*.ARC`. Unpack and decompile
+(or the **Fonts ARC → PNG/TXT…** button) writes each one as a `<name>.font\` folder:
+
+* `atlas.png` is the picture with all the characters. Redraw them, move them, or add new ones.
+* `font.txt` lists one line per glyph: character code(s), rectangle in the atlas, width and advance. It also
+  holds `kern` lines with the spacing exceptions for particular pairs.
+
+Copy the folder to `mods\YourMod\A_MAINMENU_FONTSARCHIVE.ARC\mainmenu.font\`, edit it, and install.
+* Without `font.txt`, only the atlas is replaced.
+* Without the atlas, only the metrics change.
+* If you upscale the atlas but keep the layout, leave `atlassize` as it is and the coordinates are scaled for you.
+
+Character codes are the bytes of the 8-bit text tables, so new glyphs can use free codes 0x80–0xFF.
 
 ### High-resolution textures
 
@@ -102,6 +121,8 @@ hwbt info | list <Data>
 hwbt unpack <Data> <out> [mask]
 hwbt unpack-all <Data> <out> [--dds]         full unpack + decompile
 hwbt decompile <unpackedDir> <out> [--dds]   decompile an already unpacked folder
+hwbt font-export <file.ARC> <out> [--dds]    fonts -> <name>.font\ (font.txt + atlas.png)
+hwbt font-import <file.ARC> <dir> [out.ARC]  <name>.font\ folders -> fonts in the bank
 hwbt hdr2wav <file.HDR> [out]                sound bank -> .wav
 hwbt make-soundbank <wavDir> <out.HDR> [template.HDR]     .wav -> new/updated sound bank
 hwbt make-speechbank <oggDir> <out.HDR> <template.HDR>    .ogg -> speech bank

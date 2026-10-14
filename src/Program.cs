@@ -8,7 +8,7 @@ namespace Hwbt
 {
     static class Program
     {
-        public const string Version = "1.1.1";
+        public const string Version = "1.2";
 
         [STAThread]
         static int Main(string[] args)
@@ -46,6 +46,21 @@ namespace Hwbt
                             int n = Sound.HdrToWav(File.ReadAllBytes(hdr), Path.ChangeExtension(hdr, ".RAW"),
                                 args.Length > 2 ? args[2] : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(hdr)), Path.GetFileNameWithoutExtension(hdr)));
                             Console.WriteLine("Wrote {0} .wav file(s)", n);
+                            return 0;
+                        }
+                    case "font-export":
+                        {
+                            int n = ArcTools.ExportFonts(File.ReadAllBytes(Arg(args, 1)), Arg(args, 2), args.Contains("--dds"));
+                            Console.WriteLine("Exported {0} font(s) to {1}", n, args[2]);
+                            return 0;
+                        }
+                    case "font-import":
+                        {
+                            int n;
+                            byte[] result = ArcTools.ImportFonts(File.ReadAllBytes(Arg(args, 1)), Arg(args, 2), out n);
+                            string outArc = args.Length > 3 ? args[3] : args[1];
+                            File.WriteAllBytes(outArc, result);
+                            Console.WriteLine("Imported {0} font(s) into {1}", n, outArc);
                             return 0;
                         }
                     case "make-soundbank": return Cmd.MakeBank(Arg(args, 1), Arg(args, 2), args.Length > 3 ? args[3] : null, false);
@@ -86,6 +101,8 @@ Archive:
                                       texts->TXT, sounds->WAV, speech->OGG, other entries->.bin)
   decompile  <filesDir> <outDir> [--dds] [--png]  decompile an already unpacked folder
                                       (--png: write .tga-named textures as PNG too)
+  font-export <file.ARC> <outDir> [--dds]    fonts -> <name>.font\ (font.txt + atlas.png)
+  font-import <file.ARC> <dir> [out.ARC]     <name>.font\ folders under dir -> fonts in the bank
   hdr2wav    <file.HDR> [outDir]      sound bank -> .wav files
   make-soundbank  <wavDir> <out.HDR> [template.HDR]
                                       .wav files -> NEW sound bank (out.HDR + out.RAW); with a template

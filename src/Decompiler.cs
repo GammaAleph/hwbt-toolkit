@@ -28,7 +28,7 @@ namespace Hwbt
         public static void DecompileFolder(string filesDir, string outDir, bool dds, bool allPng)
         {
             Directory.CreateDirectory(outDir);
-            int texts = 0, sounds = 0, banks = 0, textures = 0, entries = 0, errors = 0;
+            int texts = 0, sounds = 0, banks = 0, textures = 0, entries = 0, fontCount = 0, errors = 0;
 
             // texts
             foreach (var f in Directory.GetFiles(filesDir, "*.LDA"))
@@ -75,16 +75,17 @@ namespace Hwbt
             {
                 try
                 {
-                    int t, e;
-                    DecompileBank(File.ReadAllBytes(f), Path.Combine(outDir, "arc", Path.GetFileName(f)), dds, allPng, out t, out e);
+                    int t, e, fn;
+                    DecompileBank(File.ReadAllBytes(f), Path.Combine(outDir, "arc", Path.GetFileName(f)), dds, allPng, out t, out e, out fn);
                     Interlocked.Add(ref textures, t);
                     Interlocked.Add(ref entries, e);
+                    Interlocked.Add(ref fontCount, fn);
                 }
                 catch (Exception ex) { Interlocked.Increment(ref errors); Archive.Log("  ! " + Path.GetFileName(f) + ": " + ex.Message); }
                 int n = Interlocked.Increment(ref banks);
                 if (n % 100 == 0) Archive.Log(string.Format("  banks {0}/{1} ...", n, arcs.Length));
             });
-            Archive.Log(string.Format("Arcbanks: {0} ({1} textures, {2} other entries)", banks, textures, entries));
+            Archive.Log(string.Format("Arcbanks: {0} ({1} textures, {2} fonts, {3} other entries)", banks, textures, fontCount, entries));
 
             File.WriteAllText(Path.Combine(outDir, "README.txt"), Readme(), Encoding.UTF8);
             Archive.Log(string.Format("Decompiled into {0}{1}", outDir, errors > 0 ? " - " + errors + " error(s), see log" : ""));
@@ -128,11 +129,12 @@ namespace Hwbt
         }
 
         // Splits one bank: textures -> PNG (+DDS), every other entry -> raw .bin, plus an index.
-        public static void DecompileBank(byte[] arc, string outDir, bool dds, bool allPng, out int textures, out int entries)
+        public static void DecompileBank(byte[] arc, string outDir, bool dds, bool allPng, out int textures, out int entries, out int fonts)
         {
             var b = ArcBank.Parse(arc);
             var texNames = ArcTools.TextureFileNames(b);
-            textures = entries = 0;
+            var fontNames = ArcTools.FontFileNames(b);
+            textures = entries = fonts = 0;
             Directory.CreateDirectory(outDir);
             var index = new StringBuilder();
             index.AppendLine("# HWBT Toolkit - arcbank index");
@@ -153,6 +155,15 @@ namespace Hwbt
                     ArcTools.SaveImage(data, Path.Combine(outDir, file));
                     if (dds) File.WriteAllBytes(Path.Combine(tdir, texNames[e] + ".dds"), Tex.ToDds(data));
                     textures++;
+                }
+                else if (ArcTools.IsFont(e))
+                {
+                    var font = GameFont.Parse(b.GetData(e));
+                    var th = font.TexInfo;
+                    info = string.Format("  [{0} glyphs, line height {1}, atlas {2}x{3} {4}]", font.Glyphs.Count, font.LineHeight, th.Width, th.Height, th.FormatName);
+                    file = "fonts\\" + fontNames[e] + ".font\\";
+                    ArcTools.ExportFont(font, fontNames[e], Path.Combine(outDir, file), dds);
+                    fonts++;
                 }
                 else if (e.Size > 0)
                 {
@@ -195,6 +206,8 @@ arc\<BANK.ARC>\index.txt     list of every entry of the bank (type, offset, size
 arc\<BANK.ARC>\textures\     textures as PNG/TGA (and DDS if requested); to mod a texture put the edited file into
                              mods\<YourMod>\<BANK.ARC>\<same name>.png|.tga - it is compressed into the format
                              and mip count shown in index.txt
+arc\<BANK.ARC>\fonts\<FONT>.font\   bitmap fonts: font.txt (glyphs, char codes, spacing) + atlas.png;
+                             to mod: mods\<YourMod>\<BANK.ARC>\<FONT>.font\ (edited font.txt and/or atlas)
 arc\<BANK.ARC>\entries\      all other entries as raw binary (models, meshes, vertex/index buffers, materials,
                              animations, plain data ...); their internal formats are only partially documented
 

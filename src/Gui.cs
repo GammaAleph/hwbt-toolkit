@@ -93,6 +93,8 @@ namespace Hwbt
             AddButton(bar, "btnUnpack", UnpackArchive, true);
             AddButton(bar, "btnDecompile", UnpackAndDecompile, true);
             AddButton(bar, "btnTex", ExportTextures, true);
+            AddButton(bar, "btnFonts", ExportFontsGui, true);
+            AddButton(bar, "btnSounds", ExportSounds, true);
             AddButton(bar, "btnLda", ExportTexts, true);
             allPngBox = new CheckBox { AutoSize = true, Checked = Lang.AllPng, Margin = new Padding(6, 7, 3, 3) };
             texts[allPngBox] = "chkAllPng";
@@ -266,13 +268,64 @@ namespace Hwbt
             if (files == null || outDir == null) return;
             foreach (var f in files)
             {
-                string dst = Path.Combine(outDir, Path.GetFileName(f));
-                int n = ArcTools.ExportTextures(File.ReadAllBytes(f), Path.Combine(dst, "images"), "image", Lang.AllPng);
-                ArcTools.ExportTextures(File.ReadAllBytes(f), Path.Combine(dst, "dds"), "dds", false);
+                // <out>\<BANK.ARC>\*.png|tga - the same layout a mod uses, so edited files can be copied straight over
+                int n = ArcTools.ExportTextures(File.ReadAllBytes(f), Path.Combine(outDir, Path.GetFileName(f)), "image", Lang.AllPng);
                 Log(Lang.F("texCount", Path.GetFileName(f), n));
             }
             Log(Lang.T("texHint1"));
             Log(Lang.T("texHint2"));
+        }
+
+        void ExportFontsGui()
+        {
+            string[] files = null; string outDir = null;
+            Invoke(new Action(() =>
+            {
+                using (var d = new OpenFileDialog { Filter = "Arcbank (*.ARC)|*.ARC", Multiselect = true, Title = Lang.T("pickArcFonts") })
+                    if (d.ShowDialog(this) == DialogResult.OK) files = d.FileNames;
+                if (files != null) outDir = AskFolder(Lang.T("askFontDir"));
+            }));
+            if (files == null || outDir == null) return;
+            foreach (var f in files)
+            {
+                // <out>\<BANK.ARC>\<name>.font\ (font.txt + atlas.png) - same layout as in a mod
+                int n = ArcTools.ExportFonts(File.ReadAllBytes(f), Path.Combine(outDir, Path.GetFileName(f)), false);
+                Log(n > 0 ? Lang.F("fontsExported", Path.GetFileName(f), n) : Lang.F("fontNone", Path.GetFileName(f)));
+            }
+            Log(Lang.T("fontHint"));
+        }
+
+        void ExportSounds()
+        {
+            string[] files = null; string outDir = null;
+            Invoke(new Action(() =>
+            {
+                using (var d = new OpenFileDialog { Filter = "Sound banks (*.HDR)|*.HDR", Multiselect = true, Title = Lang.T("pickHdr") })
+                    if (d.ShowDialog(this) == DialogResult.OK) files = d.FileNames;
+                if (files != null) outDir = AskFolder(Lang.T("askSoundDir"));
+            }));
+            if (files == null || outDir == null) return;
+            foreach (var f in files)
+            {
+                string bank = Path.GetFileNameWithoutExtension(f);
+                byte[] hdr = File.ReadAllBytes(f);
+                // <out>\<BANK>.HDR\*.wav|ogg - same layout as in a mod
+                string dst = Path.Combine(outDir, bank + ".HDR");
+                if (Sound.IsSpeechBank(hdr))
+                {
+                    string spd = Path.ChangeExtension(f, ".SPD");
+                    if (!File.Exists(spd)) { Log(Lang.F("soundNoData", Path.GetFileName(f), ".SPD")); continue; }
+                    Log(Lang.F("soundCount", Path.GetFileName(f), Sound.SpdToOgg(hdr, spd, dst)));
+                }
+                else if (Sound.IsSoundBank(hdr))
+                {
+                    string raw = Path.ChangeExtension(f, ".RAW");
+                    if (!File.Exists(raw)) { Log(Lang.F("soundMusicIndex", Path.GetFileName(f))); continue; }
+                    Log(Lang.F("soundCount", Path.GetFileName(f), Sound.HdrToWav(hdr, raw, dst)));
+                }
+                else Log(Lang.T("error") + Path.GetFileName(f) + ": not a sound bank");
+            }
+            Log(Lang.T("soundHint"));
         }
 
         void ExportTexts()

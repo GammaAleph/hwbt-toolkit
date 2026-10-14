@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace Hwbt
@@ -72,6 +73,96 @@ namespace Hwbt
                 n++;
             }
             return n;
+        }
+
+        // ================= fonts =================
+
+        public static bool IsFont(ArcEntry e) { return e.Type == GameFont.TypeFont; }
+
+        public static Dictionary<ArcEntry, string> FontFileNames(ArcBank b)
+        {
+            var result = new Dictionary<ArcEntry, string>();
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in b.Entries)
+            {
+                if (!IsFont(e)) continue;
+                var sb = new StringBuilder();
+                foreach (char c in e.Name ?? "") sb.Append(Array.IndexOf(Path.GetInvalidFileNameChars(), c) >= 0 ? '_' : c);
+                string name = sb.Length > 0 ? sb.ToString() : "font" + e.Index;
+                if (!used.Add(name)) { name = name + "~" + e.Index; used.Add(name); }
+                result[e] = name;
+            }
+            return result;
+        }
+
+        // Writes <outDir>\<name>.font\font.txt + atlas.png (+ atlas.dds) for every font of the bank.
+        public static int ExportFonts(byte[] arc, string outDir, bool dds)
+        {
+            var b = ArcBank.Parse(arc);
+            int n = 0;
+            foreach (var kv in FontFileNames(b))
+            {
+                ExportFont(GameFont.Parse(b.GetData(kv.Key)), kv.Value, Path.Combine(outDir, kv.Value + ".font"), dds);
+                n++;
+            }
+            return n;
+        }
+
+        public static void ExportFont(GameFont font, string name, string dir, bool dds)
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "font.txt"), font.ToText(name, "atlas.png"), new UTF8Encoding(true));
+            SaveImage(font.Texture, Path.Combine(dir, "atlas.png"));
+            if (dds) File.WriteAllBytes(Path.Combine(dir, "atlas.dds"), Tex.ToDds(font.Texture));
+        }
+
+        public static bool HasFontFolders(string bankDir)
+        {
+            return Directory.GetDirectories(bankDir, "*.font", SearchOption.AllDirectories).Length > 0;
+        }
+
+        // Applies every <name>.font\ folder (font.txt and/or atlas image) found under dir to the matching font.
+        // Without font.txt only the atlas is replaced; without an atlas image only the metrics change.
+        public static byte[] ImportFonts(byte[] arc, string dir, out int count)
+        {
+            var b = ArcBank.Parse(arc);
+            var byName = new Dictionary<string, ArcEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in FontFileNames(b)) byName[kv.Value] = kv.Key;
+            count = 0;
+            foreach (var fd in Directory.GetDirectories(dir, "*.font", SearchOption.AllDirectories))
+            {
+                string name = Path.GetFileNameWithoutExtension(fd);
+                ArcEntry e;
+                if (!byName.TryGetValue(name, out e)) { Archive.Log("  ! no font named " + name + " in this bank"); continue; }
+                var orig = GameFont.Parse(b.GetData(e));
+
+                // newest atlas image wins (decompile may have written both atlas.png and atlas.dds)
+                var atlas = Directory.GetFiles(fd).Where(f => IsImage(f) && Path.GetFileNameWithoutExtension(f).Equals("atlas", StringComparison.OrdinalIgnoreCase))
+                                     .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
+                byte[] tex = null;
+                if (atlas != null)
+                {
+                    var oh = orig.TexInfo;
+                    tex = atlas.EndsWith(".dds", StringComparison.OrdinalIgnoreCase) ? Tex.FromDds(File.ReadAllBytes(atlas), oh) : TexImage.FromImage(atlas, oh);
+                    var nh = TexHeader.Read(tex, 0);
+                    if (nh.Width != oh.Width || nh.Height != oh.Height || nh.Format != oh.Format)
+                        Archive.Log(string.Format("  i {0} atlas: {1}x{2} {3} -> {4}x{5} {6}", name, oh.Width, oh.Height, oh.FormatName, nh.Width, nh.Height, nh.FormatName));
+                }
+                string txt = Path.Combine(fd, "font.txt");
+                GameFont font;
+                if (File.Exists(txt)) font = GameFont.FromText(File.ReadAllText(txt), orig, tex);
+                else if (tex != null) { font = orig; font.Texture = tex; }
+                else continue;
+
+                byte[] payload = font.Build();
+                if (payload.Length > EntryLimit)
+                    throw new InvalidDataException(string.Format("{0}: font is {1:N0} bytes - an arcbank entry can hold at most 16 MB (use a smaller atlas)", name, payload.Length));
+                if (font.Glyphs.Count != orig.Glyphs.Count)
+                    Archive.Log(string.Format("  i {0}: {1} -> {2} glyphs", name, orig.Glyphs.Count, font.Glyphs.Count));
+                b.SetData(e, payload);
+                count++;
+            }
+            return b.Raw;
         }
 
         const long EntryLimit = 0xFFFFFF;   // 24-bit size field of an arcbank entry

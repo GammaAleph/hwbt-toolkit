@@ -234,6 +234,7 @@ namespace Hwbt
         //   NAME.EXT          file with the same name as an archive entry -> replaces it
         //   TEXTxxxx.txt      text exported by lda2txt -> compiled into TEXTxxxx.LDA
         //   NAME.ARC\*.png|tga|dds  folder named like an arcbank -> textures injected into the original bank
+        //   NAME.ARC\FONT.font\ font rebuilt from font.txt and/or atlas.png|tga|dds
         //   NAME.HDR\*.wav      sound bank rebuilt (NAME.HDR + NAME.RAW), names as written by "decompile"
         //   NAME.HDR\*.ogg      speech bank rebuilt (NAME.HDR + NAME.SPD); NAME.SPD\ works too
         public static Dictionary<int, ModItem> CollectMods(CdFiles cd, Stream originalArchive, IEnumerable<string> modDirs)
@@ -255,6 +256,8 @@ namespace Hwbt
 
                     if (parent.EndsWith(".ARC", StringComparison.OrdinalIgnoreCase) && ArcTools.IsImage(fname))
                         continue; // handled per folder below
+                    if (parent.EndsWith(".font", StringComparison.OrdinalIgnoreCase))
+                        continue; // font folders (font.txt + atlas) inside NAME.ARC\, handled below
                     if ((parent.EndsWith(".HDR", StringComparison.OrdinalIgnoreCase) || parent.EndsWith(".SPD", StringComparison.OrdinalIgnoreCase)) &&
                         (fname.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) || fname.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase)))
                         continue; // sound / speech bank folders, handled below
@@ -287,14 +290,24 @@ namespace Hwbt
                         Log("  ! skipped folder (no such bank in archive): " + d.Substring(root.Length));
                         continue;
                     }
-                    if (!Directory.GetFiles(d).Any(ArcTools.IsImage)) continue;
+                    bool hasImages = Directory.GetFiles(d).Any(ArcTools.IsImage);
+                    bool hasFonts = ArcTools.HasFontFolders(d);
+                    if (!hasImages && !hasFonts) continue;
                     ModItem prev;
-                    byte[] baseArc = result.TryGetValue(e.DataIndex, out prev)
+                    byte[] arc = result.TryGetValue(e.DataIndex, out prev)
                         ? (prev.Data ?? File.ReadAllBytes(prev.FilePath))
                         : ReadBlob(cd, originalArchive, e.DataIndex);
                     int n;
-                    byte[] arc = ArcTools.ImportTextures(baseArc, d, out n);
-                    Log(string.Format("  {0}: {1} texture(s) injected", Path.GetFileName(d), n));
+                    if (hasImages)
+                    {
+                        arc = ArcTools.ImportTextures(arc, d, out n);
+                        Log(string.Format("  {0}: {1} texture(s) injected", Path.GetFileName(d), n));
+                    }
+                    if (hasFonts)
+                    {
+                        arc = ArcTools.ImportFonts(arc, d, out n);
+                        Log(string.Format("  {0}: {1} font(s) rebuilt", Path.GetFileName(d), n));
+                    }
                     result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = d.Substring(root.Length), Data = arc };
                 }
 

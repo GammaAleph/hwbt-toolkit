@@ -65,6 +65,23 @@ mip0, mip1, ...   // same layout as D3D9 / DDS
 Texture names keep the artists' source file names (`image001.tga`, `16AngelsBodyDA.png`). The largest
 retail textures are 1024×512.
 
+### Font (entry type 0x0C)
+
+Bitmap fonts live in `*_FONTSARCHIVE.ARC` and `GLOBALMENUASSETS*.ARC`: 78 fonts in `Data` + `lData`, all with the
+same layout:
+
+```
+u16 glyphCount, u16 lineHeight, u16 1, u16 0xFFFF
+glyph[glyphCount], 28 bytes: u32 0, u32 width (px), f32 u0, f32 u1, f32 v0, f32 v1, u32 0   (atlas UVs)
+u8  advance[glyphCount][glyphCount]   pen advance in pixels; row = current glyph, column = next glyph
+u8  charMap[256]                      byte code -> glyph index; 0xFE = space, 0xFF = no glyph
+texture                               standard texture header + data: the glyph atlas (DXT3 in the game)
+```
+Each row of the advance matrix has one common value, the glyph's advance, plus kerning exceptions for
+particular pairs. Glyph 0 (code 0x01) is a box drawn for missing characters. The character codes are the
+8-bit bytes of the text tables (Windows-1252), so a glyph for another alphabet can be given any free code
+from 0x80 to 0xFF.
+
 ## .LDA: string table
 
 ```
