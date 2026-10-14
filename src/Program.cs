@@ -8,7 +8,7 @@ namespace Hwbt
 {
     static class Program
     {
-        public const string Version = "1.2.2";
+        public const string Version = "1.2.3";
 
         [STAThread]
         static int Main(string[] args)

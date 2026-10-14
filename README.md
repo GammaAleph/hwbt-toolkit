@@ -37,7 +37,7 @@ This toolkit stands on the work of other people. If you enjoy it, please support
 
 ## Install
 
-1. Download `HWBT-Toolkit-v1.2.2.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
+1. Download `HWBT-Toolkit-v1.2.3.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
    and unzip it anywhere.
 2. Run `hwbt.exe`. The language selector is at the top of the window.
 
@@ -85,6 +85,23 @@ stored exactly as it is (use it to pick a different format). Extra `.wav`/`.ogg`
 existing name are added to the bank as new sounds or phrases. The game only plays them if something
 references them, though.
 The formats are described in [docs/FORMATS.md](docs/FORMATS.md).
+
+### Data and lData (high / low detail)
+
+The game has two copies of its data: `Data\` (high detail) and `lData\` (low detail). A mod is installed into
+**both**. Most files have the same names in both, but many low-detail **arcbanks contain different textures**.
+For example, `lData\BRUTALISTIC_LOD0_GRA.ARC` has only `Brutalistic-body-D` and `env`, while the `Data` version has
+`Brutalistic-body-DA` and six more. For such banks, give the low-detail version its own part:
+
+```
+mods\MyCar\BRUTALISTIC_LOD0_GRA.ARC\Brutalistic-body-DA.png        <- both (here: only Data has it)
+mods\MyCar\lData\BRUTALISTIC_LOD0_GRA.ARC\Brutalistic-body-D.png   <- only lData
+mods\MyCar\Data\...                                                <- only Data
+```
+
+Export the low-detail textures from `lData\` with *Unpack and decompile* (its `lData\` output). If images don't match
+a bank, the log lists the textures the bank really has. The detail level the game uses is chosen in
+`DisplayConfig.exe`.
 
 ### Fonts
 

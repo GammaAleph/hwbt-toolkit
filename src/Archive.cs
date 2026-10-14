@@ -82,7 +82,7 @@ namespace Hwbt
                 throw new IOException("Output folder must differ from the source folder (use 'patch' for in-place).");
 
             Dictionary<int, ModItem> mods;
-            using (var src = OpenRead(srcAr)) mods = CollectMods(cd, src, new[] { modDir });
+            using (var src = OpenRead(srcAr)) mods = CollectMods(cd, src, new[] { modDir }, DataDirName(dataDir));
 
             var order = Enumerable.Range(0, (int)cd.NumTotalFiles).OrderBy(i => cd.FileOffsets[i]).ToList();
             var buf = new byte[1 << 20];
@@ -126,7 +126,7 @@ namespace Hwbt
             var cd = CdFiles.Load(dat);
             string arPath = cd.ArchiveFileIn(dataDir);
             Dictionary<int, ModItem> mods;
-            using (var ar = OpenRead(arPath)) mods = CollectMods(cd, ar, modDirs);
+            using (var ar = OpenRead(arPath)) mods = CollectMods(cd, ar, modDirs, DataDirName(dataDir));
             if (mods.Count == 0) { Log("Nothing to patch in " + dataDir); return 0; }
 
             var buf = new byte[1 << 20];
@@ -237,17 +237,40 @@ namespace Hwbt
         //   NAME.ARC\FONT.font\ font rebuilt from font.txt and/or atlas.png|tga|dds
         //   NAME.HDR\*.wav      sound bank rebuilt (NAME.HDR + NAME.RAW), names as written by "decompile"
         //   NAME.HDR\*.ogg      speech bank rebuilt (NAME.HDR + NAME.SPD); NAME.SPD\ works too
-        public static Dictionary<int, ModItem> CollectMods(CdFiles cd, Stream originalArchive, IEnumerable<string> modDirs)
+        //   Data\..., lData\... sub-folders of a mod apply only to that data folder (the low-detail lData banks
+        //                      often contain different textures than Data); everything else applies to both
+        public static Dictionary<int, ModItem> CollectMods(CdFiles cd, Stream originalArchive, IEnumerable<string> modDirs, string dataDirName = null)
         {
             var result = new Dictionary<int, ModItem>();
             var byName = new Dictionary<string, CdEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var e in cd.Entries) if (e.HasData && !byName.ContainsKey(Path.GetFileName(e.DiskPath))) byName[Path.GetFileName(e.DiskPath)] = e;
 
-            foreach (var modDir in modDirs)
+            // expand every mod into (root, excluded sub-folders): the mod itself without its Data\ / lData\ parts,
+            // plus the part for the data folder being patched
+            var roots = new List<KeyValuePair<string, string[]>>();
+            var withOwnPart = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // mods that have a part for this data folder
+            foreach (var md in modDirs)
             {
-                if (!Directory.Exists(modDir)) { Log("  ! mod folder not found: " + modDir); continue; }
+                if (!Directory.Exists(md)) { Log("  ! mod folder not found: " + md); continue; }
+                var parts = GameDataDirs.Select(n => Path.Combine(md, n)).Where(Directory.Exists).ToArray();
+                roots.Add(new KeyValuePair<string, string[]>(md, parts.Select(p => Path.GetFullPath(p).TrimEnd('\\') + "\\").ToArray()));
+                if (dataDirName != null)
+                    foreach (var p in parts)
+                        if (Path.GetFileName(p).Equals(dataDirName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            roots.Add(new KeyValuePair<string, string[]>(p, new string[0]));
+                            withOwnPart.Add(md);
+                        }
+            }
+
+            foreach (var rootEntry in roots)
+            {
+                string modDir = rootEntry.Key;
+                var excluded = rootEntry.Value;
+                Func<string, bool> keep = p => !excluded.Any(x => (Path.GetFullPath(p).TrimEnd('\\') + "\\").StartsWith(x, StringComparison.OrdinalIgnoreCase));
                 string root = Path.GetFullPath(modDir).TrimEnd('\\') + "\\";
-                foreach (var f in Directory.GetFiles(modDir, "*", SearchOption.AllDirectories))
+                bool hasOwnContent = Directory.GetFiles(modDir, "*", SearchOption.AllDirectories).Any(keep);
+                foreach (var f in Directory.GetFiles(modDir, "*", SearchOption.AllDirectories).Where(keep))
                 {
                     string rel = Path.GetFullPath(f).Substring(root.Length);
                     string parent = Path.GetFileName(Path.GetDirectoryName(f));
@@ -291,7 +314,7 @@ namespace Hwbt
                 };
                 // the mod folder itself may be a bank folder (e.g. mods\A_MAINMENU_FONTSARCHIVE.ARC\)
                 Func<string, IEnumerable<string>> dirsNamed = ext =>
-                    Directory.GetDirectories(modDir, "*" + ext, SearchOption.AllDirectories)
+                    Directory.GetDirectories(modDir, "*" + ext, SearchOption.AllDirectories).Where(keep)
                         .Concat(modDir.TrimEnd('\\').EndsWith(ext, StringComparison.OrdinalIgnoreCase) ? new[] { modDir } : new string[0]);
 
                 foreach (var d in dirsNamed(".ARC"))
@@ -321,9 +344,15 @@ namespace Hwbt
                     int n, changes = 0;
                     if (hasImages)
                     {
-                        arc = ArcTools.ImportTextures(arc, d, out n);
-                        Log(string.Format("  {0}: {1} texture(s) injected", Path.GetFileName(d.TrimEnd('\\')), n));
+                        int missing;
+                        arc = ArcTools.ImportTextures(arc, d, out n, out missing, !withOwnPart.Contains(modDir));
+                        if (n > 0 || !withOwnPart.Contains(modDir))
+                            Log(string.Format("  {0}: {1} texture(s) injected", Path.GetFileName(d.TrimEnd('\\')), n));
                         changes += n;
+                        bool isDataPart = GameDataDirs.Any(g => g.Equals(Path.GetFileName(modDir.TrimEnd('\\')), StringComparison.OrdinalIgnoreCase));
+                        if (missing > 0 && dataDirName != null && !isDataPart && !withOwnPart.Contains(modDir))
+                            Log(string.Format("  i {0} has different textures in {1}\\ - put the {1} versions into <mod>\\{1}\\{2}\\ (export them from {1}\\ with \"Textures ARC\" or \"Unpack and decompile\")",
+                                Path.GetFileName(d.TrimEnd('\\')), dataDirName, Path.GetFileName(d.TrimEnd('\\'))));
                     }
                     if (hasFonts)
                     {
@@ -338,7 +367,7 @@ namespace Hwbt
                 // <name>.font folders that are not inside a NAME.ARC folder: apply them to every bank that has a font
                 // with that name (e.g. "mainmenu" exists in 13 menu banks)
                 var orphanFonts = ArcTools.FindFontDirs(modDir).Concat(ArcTools.IsFontDir(modDir) ? new[] { modDir } : new string[0])
-                    .Where(fd => !HasArcAncestor(fd, modDir)).ToList();
+                    .Where(fd => keep(fd) && !HasArcAncestor(fd, modDir)).ToList();
                 if (orphanFonts.Count > 0) ApplyFontsEverywhere(cd, originalArchive, orphanFonts, result, relOf);
 
                 // sound banks: BANK.HDR\*.wav -> BANK.HDR + BANK.RAW; speech banks: BANK.HDR\*.ogg (or BANK.SPD\) -> BANK.HDR + BANK.SPD
@@ -372,7 +401,7 @@ namespace Hwbt
                     result[dataEntry.DataIndex] = new ModItem { DataIndex = dataEntry.DataIndex, Source = src + (speech ? " (SPD)" : " (RAW)"), Data = newData };
                 }
 
-                if (result.Count == itemsBefore && !recognised)
+                if (result.Count == itemsBefore && !recognised && hasOwnContent)
                 {
                     Log("  ! " + Path.GetFileName(modDir.TrimEnd('\\')) + ": nothing in this mod matches the game files. Expected for example:");
                     Log("      <mod>\\TITLE.OGG   <mod>\\TEXT0000.txt   <mod>\\<BANK>.ARC\\<texture>.png");
@@ -381,6 +410,12 @@ namespace Hwbt
             }
             foreach (var m in result.Values.OrderBy(x => x.Source)) Log("  + " + m.Source);
             return result;
+        }
+
+        // "Data" or "lData" for a data folder path (used to pick the matching part of a mod).
+        static string DataDirName(string dataDir)
+        {
+            return Path.GetFileName(Path.GetFullPath(dataDir).TrimEnd(Path.DirectorySeparatorChar));
         }
 
         static bool HasArcAncestor(string dir, string modDir)

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2.3
+* **Data / lData parts in mods**: `mods\X\Data\...` is installed only into `Data\`, `mods\X\lData\...` only into
+  `lData\`; everything else goes into both. Needed because many low-detail banks contain different textures
+  (e.g. `lData\BRUTALISTIC_LOD0_GRA.ARC` has `Brutalistic-body-D`, not `Brutalistic-body-DA`).
+* Images that match no texture of a bank are reported in **one line**, together with the textures the bank really
+  has, plus a hint to put the `lData` version into `<mod>\lData\<BANK.ARC>\`. That replaces one warning per image.
+  When the mod already has an `lData\` part, the shared images aren't reported for `lData`.
+
 ## v1.2.2
 * Fixed: textures in a sub-folder of a bank folder were skipped. This happens when the bank folder from
   *Unpack and decompile* (`<BANK.ARC>\textures\*.png`) is copied into a mod. Texture images are now found

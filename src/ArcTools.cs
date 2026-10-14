@@ -248,18 +248,25 @@ namespace Hwbt
         // Images identical to the original are left alone (no needless DXT re-compression).
         public static byte[] ImportTextures(byte[] arc, string dir, out int count)
         {
+            int missing;
+            return ImportTextures(arc, dir, out count, out missing);
+        }
+
+        public static byte[] ImportTextures(byte[] arc, string dir, out int count, out int missing, bool reportMissing = true)
+        {
             var b = ArcBank.Parse(arc);
             int originalSize = arc.Length;
             var byName = new Dictionary<string, ArcEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var kv in TextureFileNames(b)) byName[kv.Value] = kv.Key;
             count = 0;
             int unchanged = 0;
+            var notFound = new List<string>();
             foreach (var f in TextureImageFiles(dir))
             {
                 ArcEntry e;
                 if (!byName.TryGetValue(Path.GetFileNameWithoutExtension(f), out e))
                 {
-                    Archive.Log("  ! no texture named " + Path.GetFileNameWithoutExtension(f) + " in this bank");
+                    notFound.Add(Path.GetFileNameWithoutExtension(f));
                     continue;
                 }
                 if (IsUnchanged(f, b.GetData(e))) { unchanged++; continue; }
@@ -276,6 +283,10 @@ namespace Hwbt
                 count++;
             }
             if (unchanged > 0) Archive.Log(string.Format("  i {0} texture(s) identical to the original - left as they are", unchanged));
+            missing = notFound.Count;
+            if (missing > 0 && reportMissing)
+                Archive.Log(string.Format("  ! {0} image(s) match no texture of this bank: {1}\r\n      this bank has: {2}",
+                    missing, string.Join(", ", notFound), byName.Count > 0 ? string.Join(", ", byName.Keys.OrderBy(k => k)) : "(no textures)"));
             if (b.Raw.Length > originalSize * 2 && b.Raw.Length > 8 << 20)
                 Archive.Log(string.Format("  ! bank grew from {0:N1} MB to {1:N1} MB - if the game crashes while loading it, use smaller or compressed textures.",
                     originalSize / 1048576.0, b.Raw.Length / 1048576.0));
