@@ -37,7 +37,7 @@ This toolkit stands on the work of other people. If you enjoy it, please support
 
 ## Install
 
-1. Download `HWBT-Toolkit-v1.3.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
+1. Download `HWBT-Toolkit-v1.3.1.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
    and unzip it anywhere.
 2. Run `hwbt.exe`. The language selector is at the top of the window.
 

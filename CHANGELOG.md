@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.3.1
 * Fixed: a false "nothing in this mod matches the game files" warning for mods that only have `Data\` / `lData\`
   parts plus a README at the top (e.g. made from `mods\_template`). README and other notes are no longer counted
   as mod content. The warning now shows the template layout as its example.
