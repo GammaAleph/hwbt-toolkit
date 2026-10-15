@@ -271,6 +271,8 @@ namespace Hwbt
                 string root = Path.GetFullPath(modDir).TrimEnd('\\') + "\\";
                 // real content = anything but notes (README.txt etc.); a mod that only has Data / lData parts has no shared part to warn about
                 bool hasOwnContent = Directory.GetFiles(modDir, "*", SearchOption.AllDirectories).Where(keep).Any(x => !IsNoteFile(x));
+                int itemsBefore = result.Count;
+                bool recognised = false; // something in the mod matched the game, even if it turned out unchanged
                 int unchanged = 0; // files identical to the original game data (skipped)
                 foreach (var f in Directory.GetFiles(modDir, "*", SearchOption.AllDirectories).Where(keep))
                 {
@@ -288,6 +290,7 @@ namespace Hwbt
                         continue; // sound / speech bank folders (BANK.HDR\ or decompile's sounds\BANK\, speech\BANK\), handled below
                     if (byName.TryGetValue(fname, out e))
                     {
+                        recognised = true;
                         // whole files copied from "files\" of the decompile output are usually unchanged - skip those
                         if (SameAsOriginal(cd, originalArchive, e.DataIndex, f)) { unchanged++; continue; }
                         result[e.DataIndex] = new ModItem { DataIndex = e.DataIndex, Source = rel, FilePath = f };
@@ -296,6 +299,7 @@ namespace Hwbt
                     if (fname.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) &&
                         byName.TryGetValue(Path.GetFileNameWithoutExtension(fname) + ".LDA", out e))
                     {
+                        recognised = true;
                         var lda = Lda.FromText(File.ReadAllText(f));
                         byte[] origLda = ReadBlob(cd, originalArchive, e.DataIndex);
                         var orig = Lda.Parse(origLda);
@@ -312,8 +316,6 @@ namespace Hwbt
                     Log("  ! skipped (no such file in archive): " + rel);
                 }
 
-                int itemsBefore = result.Count;
-                bool recognised = false; // something in the mod matched the game, even if it turned out unchanged
                 Func<string, string> relOf = p =>
                 {
                     string full = Path.GetFullPath(p).TrimEnd('\\') + "\\";

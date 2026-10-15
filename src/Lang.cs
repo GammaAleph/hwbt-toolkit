@@ -24,6 +24,10 @@ namespace Hwbt
             { "btnRefresh", new[] { "Refresh list", "Обновить список" } },
             { "btnOpenMods", new[] { "Open mods folder", "Открыть папку модов" } },
             { "btnUnpack", new[] { "Unpack archive…", "Распаковать архив…" } },
+            { "chkSaveLogs", new[] { "Save a log file when installing / uninstalling mods (logs\\ folder)",
+                                     "Сохранять лог при установке / удалении модов (папка logs\\)" } },
+            { "logSaved", new[] { "Log saved: ", "Лог сохранён: " } },
+            { "logSaveFail", new[] { "Could not save the log: ", "Не удалось сохранить лог: " } },
             { "chkAllPng", new[] { "Convert all textures to PNG (otherwise .tga textures stay .tga)",
                                    "Конвертировать все текстуры в PNG (иначе .tga остаются .tga)" } },
             { "btnDecompile", new[] { "Unpack and decompile…", "Распаковать и декомпилировать…" } },
@@ -129,6 +133,7 @@ namespace Hwbt
 
         // Other persisted GUI options.
         public static bool AllPng; // export .tga-named textures as PNG too
+        public static bool SaveLogs; // write logs\*.log for mod installs / restores
 
         public static void Load()
         {
@@ -139,6 +144,7 @@ namespace Hwbt
                 {
                     if (line.StartsWith("lang=")) Current = line.Substring(5).Trim() == "ru" ? 1 : 0;
                     if (line.StartsWith("allpng=")) AllPng = line.Substring(7).Trim() == "1";
+                    if (line.StartsWith("savelogs=")) SaveLogs = line.Substring(9).Trim() == "1";
                 }
             }
             catch { }
@@ -149,7 +155,8 @@ namespace Hwbt
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile));
-                File.WriteAllText(SettingsFile, "lang=" + (Current == 1 ? "ru" : "en") + "\r\nallpng=" + (AllPng ? "1" : "0") + "\r\n");
+                File.WriteAllText(SettingsFile, "lang=" + (Current == 1 ? "ru" : "en") + "\r\nallpng=" + (AllPng ? "1" : "0")
+                    + "\r\nsavelogs=" + (SaveLogs ? "1" : "0") + "\r\n");
             }
             catch { }
         }

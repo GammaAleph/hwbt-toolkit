@@ -9,3 +9,6 @@ community/*
 # mods may contain game assets - only the empty template is tracked
 mods/*
 !mods/_template/
+
+# logs written by the "save log" option
+logs/

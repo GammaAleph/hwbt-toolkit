@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -24,7 +25,8 @@ namespace Hwbt
         TextBox gameBox, modsBox, logBox;
         CheckedListBox modList;
         ComboBox langBox;
-        CheckBox allPngBox;
+        CheckBox allPngBox, saveLogsBox;
+        StringBuilder logCapture; // output of the running install / restore job when "save log" is checked
         Label langLabel, gameLabel, modsLabel, cpStatus;
         GroupBox modGroup, cpGroup;
         LinkLabel credits;
@@ -86,8 +88,8 @@ namespace Hwbt
 
             // archive / mod buttons
             var bar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
-            AddButton(bar, "btnInstall", InstallMods, true);
-            AddButton(bar, "btnRestore", Uninstall, true);
+            AddButton(bar, "btnInstall", InstallMods, true, "install-mods");
+            AddButton(bar, "btnRestore", Uninstall, true, "restore-original");
             AddButton(bar, "btnRefresh", RefreshMods, false);
             AddButton(bar, "btnOpenMods", delegate { Directory.CreateDirectory(modsBox.Text); Process.Start("explorer.exe", "\"" + modsBox.Text + "\""); }, false);
             AddButton(bar, "btnUnpack", UnpackArchive, true);
@@ -100,6 +102,10 @@ namespace Hwbt
             texts[allPngBox] = "chkAllPng";
             allPngBox.CheckedChanged += delegate { Lang.AllPng = allPngBox.Checked; Lang.Save(); };
             bar.Controls.Add(allPngBox);
+            saveLogsBox = new CheckBox { AutoSize = true, Checked = Lang.SaveLogs, Margin = new Padding(6, 7, 3, 3) };
+            texts[saveLogsBox] = "chkSaveLogs";
+            saveLogsBox.CheckedChanged += delegate { Lang.SaveLogs = saveLogsBox.Checked; Lang.Save(); };
+            bar.Controls.Add(saveLogsBox);
             root.Controls.Add(bar);
 
             // community patch
@@ -179,11 +185,12 @@ namespace Hwbt
             return l;
         }
 
-        void AddButton(FlowLayoutPanel bar, string key, Action action, bool isJob)
+        // logName: the job's console output is saved to logs\<logName>_<time>.log when "save log" is checked
+        void AddButton(FlowLayoutPanel bar, string key, Action action, bool isJob, string logName = null)
         {
             var b = new Button { AutoSize = true, Padding = new Padding(4, 2, 4, 2) };
             texts[b] = key;
-            b.Click += delegate { if (isJob) RunJob(b.Text, action); else action(); };
+            b.Click += delegate { if (isJob) RunJob(b.Text, action, logName); else action(); };
             bar.Controls.Add(b);
             if (isJob) jobButtons.Add(b);
         }
@@ -192,22 +199,65 @@ namespace Hwbt
         {
             if (InvokeRequired) { BeginInvoke(new Action<string>(Log), s); return; }
             logBox.AppendText(s + Environment.NewLine);
+            if (logCapture != null) logCapture.AppendLine(s);
         }
 
-        void RunJob(string title, Action action)
+        void RunJob(string title, Action action, string logName = null)
         {
             foreach (var b in jobButtons) b.Enabled = false;
+            if (logName != null && Lang.SaveLogs)
+            {
+                logCapture = new StringBuilder();
+                logCapture.AppendLine("HWBT Toolkit v" + Program.Version + "  " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                logCapture.AppendLine("Game folder: " + gameBox.Text);
+                logCapture.AppendLine("Mods folder: " + modsBox.Text);
+                logCapture.AppendLine("Checked mods (lower ones win): " +
+                    (modList.CheckedItems.Count > 0 ? string.Join(", ", modList.CheckedItems.Cast<string>()) : "(none)"));
+                logCapture.AppendLine();
+            }
             Log("---- " + title);
             var t = new Thread(() =>
             {
                 try { action(); Log(Lang.T("done")); }
                 catch (UnauthorizedAccessException ex) { Log(Lang.T("noAccess") + "(" + ex.Message + ")"); BeginInvoke(new Action(OfferElevation)); }
                 catch (Exception ex) { Log(Lang.T("error") + ex.Message); }
-                BeginInvoke(new Action(() => { foreach (var b in jobButtons) b.Enabled = true; RefreshPatchStatus(); }));
+                BeginInvoke(new Action(() =>
+                {
+                    foreach (var b in jobButtons) b.Enabled = true;
+                    if (logCapture != null) SaveCapturedLog(logName);
+                    RefreshPatchStatus();
+                }));
             });
             t.IsBackground = true;
             t.SetApartmentState(ApartmentState.STA);
             t.Start();
+        }
+
+        // Writes the captured job output to <tool>\logs\ (or %APPDATA%\HWBT-Toolkit\logs\ when that is not writable).
+        void SaveCapturedLog(string logName)
+        {
+            string text = logCapture.ToString();
+            logCapture = null;
+            string file = logName + "_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".log";
+            string[] dirs =
+            {
+                Path.Combine(ToolDir, "logs"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HWBT-Toolkit", "logs"),
+            };
+            string error = null;
+            foreach (var dir in dirs)
+            {
+                try
+                {
+                    Directory.CreateDirectory(dir);
+                    string path = Path.Combine(dir, file);
+                    File.WriteAllText(path, text, new UTF8Encoding(true));
+                    Log(Lang.T("logSaved") + path);
+                    return;
+                }
+                catch (Exception ex) { error = ex.Message; }
+            }
+            Log(Lang.T("logSaveFail") + error);
         }
 
         // ---------- mods ----------

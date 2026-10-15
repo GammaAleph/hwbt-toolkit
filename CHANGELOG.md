@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.2
+* New checkbox **Save a log file when installing / uninstalling mods**. When it is checked, everything the console
+  at the bottom of the window shows from the click on *Install / uninstall mods* (or *Restore original*) until the
+  job ends is saved to `logs\install-mods_<date>_<time>.log` (`restore-original_…` for a restore) next to
+  `hwbt.exe`, or to `%APPDATA%\HWBT-Toolkit\logs\` when the program folder is read-only. The file starts with the
+  toolkit version, the game and mods folders and the checked mods in install order. The setting is remembered.
+* Fixed: a mod made only of loose files at its top (for example `TEXT0000.txt` or `TITLE.OGG`) was installed
+  correctly but still got the "nothing here matches the game files" warning.
+
 ## v1.3.1
 * Fixed: a false "nothing in this mod matches the game files" warning for mods that only have `Data\` / `lData\`
   parts plus a README at the top (e.g. made from `mods\_template`). README and other notes are no longer counted
