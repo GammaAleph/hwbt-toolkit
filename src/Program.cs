@@ -8,7 +8,7 @@ namespace Hwbt
 {
     static class Program
     {
-        public const string Version = "1.3.2";
+        public const string Version = "1.3.2-models";
 
         [STAThread]
         static int Main(string[] args)
@@ -36,6 +36,27 @@ namespace Hwbt
                     case "lda2txt": return Cmd.Lda2Txt(Arg(args, 1), args.Length > 2 ? args[2] : null);
                     case "txt2lda": return Cmd.Txt2Lda(Arg(args, 1), args.Length > 2 ? args[2] : null);
                     case "arc-list": return Cmd.ArcList(Arg(args, 1));
+                    case "model-export":
+                        {
+                            // <file.ARC|folder> <outDir>: every bank with models -> <outDir>\<BANK>\<BANK>.obj + .mtl + textures
+                            string src = Arg(args, 1), outRoot = Arg(args, 2);
+                            var files = Directory.Exists(src) ? Directory.GetFiles(src, "*.ARC") : new[] { src };
+                            int banks = 0;
+                            foreach (var f in files)
+                            {
+                                string name = Path.GetFileNameWithoutExtension(f);
+                                try
+                                {
+                                    var r = ArcModels.ExportObj(File.ReadAllBytes(f), Path.Combine(outRoot, Path.GetFileName(f)), name, args.Contains("--png"));
+                                    if (r == null) continue;
+                                    banks++;
+                                    Console.WriteLine("{0}: {1} model(s), {2:N0} triangles, {3} texture(s)", Path.GetFileName(f), r.Models, r.Triangles, r.Textures);
+                                }
+                                catch (Exception ex) { Console.WriteLine("  ! {0}: {1}", Path.GetFileName(f), ex.Message); }
+                            }
+                            Console.WriteLine("Exported models from {0} bank(s) into {1}", banks, outRoot);
+                            return 0;
+                        }
                     case "tex-export": return Cmd.TexExport(Arg(args, 1), Arg(args, 2), args.Length > 3 ? args[3].ToLowerInvariant() : "image");
                     case "tex-import": return Cmd.TexImport(Arg(args, 1), Arg(args, 2), args.Length > 3 ? args[3] : null);
                     case "unpack-all": Decompiler.UnpackAll(Arg(args, 1), Arg(args, 2), args.Contains("--dds"), args.Contains("--png")); return 0;
@@ -127,6 +148,7 @@ Texts (.LDA):
 
 Arcbanks (.ARC) / textures:
   arc-list   <file.ARC>               list entries of a bank
+  model-export <file.ARC|folder> <outDir> [--png]   3D models -> .obj + .mtl + textures (Blender)
   tex-export <file.ARC|folder> <out> [image|png|dds]  textures -> images (image = keep .tga/.png as
                                       originally named, png = everything as PNG; folder: one sub-folder per bank)
   tex-import <file.ARC> <imgDir> [out.ARC]      .png/.tga/.dds -> bank (PNG/TGA are compressed into the

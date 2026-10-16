@@ -98,6 +98,7 @@ namespace Hwbt
             AddButton(bar, "btnFonts", ExportFontsGui, true);
             AddButton(bar, "btnSounds", ExportSounds, true);
             AddButton(bar, "btnLda", ExportTexts, true);
+            AddButton(bar, "btnModels", ExportModels, true);
             allPngBox = new CheckBox { AutoSize = true, Checked = Lang.AllPng, Margin = new Padding(6, 7, 3, 3) };
             texts[allPngBox] = "chkAllPng";
             allPngBox.CheckedChanged += delegate { Lang.AllPng = allPngBox.Checked; Lang.Save(); };
@@ -376,6 +377,28 @@ namespace Hwbt
                 else Log(Lang.T("error") + Path.GetFileName(f) + ": not a sound bank");
             }
             Log(Lang.T("soundHint"));
+        }
+
+        // 3D models -> <out>\<BANK.ARC>\<BANK>.obj (+ _lodN.obj) + .mtl + textures
+        void ExportModels()
+        {
+            string[] files = null; string outDir = null;
+            Invoke(new Action(() =>
+            {
+                using (var d = new OpenFileDialog { Filter = "Arcbank (*.ARC)|*.ARC", Multiselect = true, Title = Lang.T("pickArcModels") })
+                    if (d.ShowDialog(this) == DialogResult.OK) files = d.FileNames;
+                if (files != null) outDir = AskFolder(Lang.T("askModelDir"));
+            }));
+            if (files == null || outDir == null) return;
+            foreach (var f in files)
+            {
+                string dst = Path.Combine(outDir, Path.GetFileName(f));
+                var r = ArcModels.ExportObj(File.ReadAllBytes(f), dst, Path.GetFileNameWithoutExtension(f), Lang.AllPng);
+                if (r == null) Log(Lang.F("modelNone", Path.GetFileName(f)));
+                else Log(Lang.F("modelCount", Path.GetFileName(f), r.Models, r.Triangles, r.Textures, dst));
+            }
+            Log(Lang.T("modelHint"));
+            Process.Start("explorer.exe", "\"" + outDir + "\"");
         }
 
         void ExportTexts()

@@ -55,6 +55,7 @@ The toolkit requires .NET Framework 4.5 or later, which is built into Windows 8,
 | Fonts ARC → PNG/TXT…           | exports the fonts of selected `.ARC` banks into `<BANK.ARC>\<name>.font\` |
 | Sounds HDR → WAV/OGG…          | exports selected sound banks (`.wav`) and speech banks (`.ogg`) into `<BANK>.HDR\` |
 | Texts LDA → TXT…               | converts string tables to editable text                              |
+| Models ARC → OBJ…              | exports the 3D models of selected banks as `.obj` + `.mtl` + textures for Blender (cars assembled, `_LODX_GRA` banks as `_lod1.._lod3.obj`, tracks with every piece in place). Export only - models cannot be put back yet |
 | ☐ Convert all textures to PNG  | textures named `*.tga` in the game are exported as TGA unless this is checked |
 | ☐ Save a log file when installing / uninstalling mods | everything the console at the bottom shows from the click on **Install / uninstall mods** (or **Restore original**) until the job ends is saved to `logs\install-mods_<date>_<time>.log` next to `hwbt.exe` (or `%APPDATA%\HWBT-Toolkit\logs\` if that folder is read-only), with the game folder and the list of checked mods at the top. Handy for bug reports |
 | Install Patch V1 / V2          | downloads the author's patch (SHA-256 verified) and runs its installer |

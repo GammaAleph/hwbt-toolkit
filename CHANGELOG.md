@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.3.2-models (local fork)
+* **3D model export.** New button **Models ARC → OBJ…** and CLI `model-export <file.ARC|folder> <outDir> [--png]`:
+  every bank with models becomes `<BANK>.obj` + `<BANK>.mtl` + the diffuse textures, ready for Blender
+  (File > Import > Wavefront). Node transforms are baked in, so cars come out assembled (body + 4 wheels) and
+  tracks with every piece in place. Cars' `_LODX_GRA` banks give one file per level of detail
+  (`_lod1/_lod2/_lod3.obj`); the damage parts (`Front-MORPH` ...) are separate objects.
+* The geometry layout is the one documented by Technyx (Street Racing Syndicate); Technyx's own `arc_extract`
+  stops on Hot Wheels banks because their materials differ ("bad allocation"). The material layout used here:
+  13 u32 header, `{id, size, data}` parameters, then texture slots `{u16 type, u16 count, {texture, u32, u32}}`.
+* Tested on all 1820 PC banks: 110 contain models, all export without errors (cars, tracks, menu scenes).
+
 ## v1.3.2
 * New checkbox **Save a log file when installing / uninstalling mods**. When it is checked, everything the console
   at the bottom of the window shows from the click on *Install / uninstall mods* (or *Restore original*) until the
