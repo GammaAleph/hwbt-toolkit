@@ -26,6 +26,10 @@ namespace Hwbt
             { "btnUnpack", new[] { "Unpack archive…", "Распаковать архив…" } },
             { "chkSaveLogs", new[] { "Save a log file when installing / uninstalling mods (logs\\ folder)",
                                      "Сохранять лог при установке / удалении модов (папка logs\\)" } },
+            { "chkRebuild", new[] { "Rebuild the archive when installing (replaced files are removed, the original archive is backed up)",
+                                    "Пересобирать архив при установке (заменённые файлы удаляются, оригинал архива сохраняется в бэкап)" } },
+            { "rebuildInfo", new[] { "Rebuild mode: the archives are written anew without the replaced files; the originals are kept as ARCHIVE0.AR.hwbt_original (\"Restore original\" puts them back).",
+                                     "Режим пересборки: архивы собираются заново без заменённых файлов; оригиналы сохраняются как ARCHIVE0.AR.hwbt_original («Вернуть оригинал» возвращает их)." } },
             { "logSaved", new[] { "Log saved: ", "Лог сохранён: " } },
             { "logSaveFail", new[] { "Could not save the log: ", "Не удалось сохранить лог: " } },
             { "chkAllPng", new[] { "Convert all textures to PNG (otherwise .tga textures stay .tga)",
@@ -142,6 +146,7 @@ namespace Hwbt
         // Other persisted GUI options.
         public static bool AllPng; // export .tga-named textures as PNG too
         public static bool SaveLogs; // write logs\*.log for mod installs / restores
+        public static bool Rebuild;  // install mods by rebuilding the archives (Archive.Repack) instead of appending
 
         public static void Load()
         {
@@ -153,6 +158,7 @@ namespace Hwbt
                     if (line.StartsWith("lang=")) Current = line.Substring(5).Trim() == "ru" ? 1 : 0;
                     if (line.StartsWith("allpng=")) AllPng = line.Substring(7).Trim() == "1";
                     if (line.StartsWith("savelogs=")) SaveLogs = line.Substring(9).Trim() == "1";
+                    if (line.StartsWith("rebuild=")) Rebuild = line.Substring(8).Trim() == "1";
                 }
             }
             catch { }
@@ -164,7 +170,7 @@ namespace Hwbt
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile));
                 File.WriteAllText(SettingsFile, "lang=" + (Current == 1 ? "ru" : "en") + "\r\nallpng=" + (AllPng ? "1" : "0")
-                    + "\r\nsavelogs=" + (SaveLogs ? "1" : "0") + "\r\n");
+                    + "\r\nsavelogs=" + (SaveLogs ? "1" : "0") + "\r\nrebuild=" + (Rebuild ? "1" : "0") + "\r\n");
             }
             catch { }
         }

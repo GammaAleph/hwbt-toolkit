@@ -8,7 +8,7 @@ namespace Hwbt
 {
     static class Program
     {
-        public const string Version = "1.3.2-models";
+        public const string Version = "1.4";
 
         [STAThread]
         static int Main(string[] args)
@@ -29,9 +29,10 @@ namespace Hwbt
                     case "unpack": Archive.Unpack(Arg(args, 1), Arg(args, 2), args.Length > 3 ? args[3] : null); return 0;
                     case "pack": Archive.Pack(Arg(args, 1), Arg(args, 2), Arg(args, 3)); return 0;
                     case "patch": Archive.Patch(Arg(args, 1), args.Skip(2).ToList()); return 0;
+                    case "repack": Archive.Repack(Arg(args, 1), args.Skip(2).ToList()); return 0;
                     case "restore": Archive.Restore(Arg(args, 1), false); return 0;
                     case "uninstall": Archive.Uninstall(Arg(args, 1)); return 0;
-                    case "install-mods": Archive.InstallGame(Arg(args, 1), Arg(args, 2)); return 0;
+                    case "install-mods": Archive.InstallGame(Arg(args, 1), Arg(args, 2), args.Contains("--rebuild")); return 0;
                     case "uninstall-mods": Archive.UninstallGame(Arg(args, 1)); return 0;
                     case "lda2txt": return Cmd.Lda2Txt(Arg(args, 1), args.Length > 2 ? args[2] : null);
                     case "txt2lda": return Cmd.Txt2Lda(Arg(args, 1), args.Length > 2 ? args[2] : null);
@@ -122,6 +123,8 @@ Archive:
   unpack <data> <outDir> [mask]       extract files (mask: *.OGG, TEXT*.LDA ...)
   pack   <data> <modDir> <outDir>     build a NEW CDFILES.DAT+ARCHIVE0.AR with mod files
   patch  <data> <modDir> [modDir...]  patch IN PLACE (auto-backup; re-run = re-apply)
+  repack <data> <modDir> [modDir...]  rebuild IN PLACE: replaced files are dropped, the original
+                                      archive is kept as ARCHIVE0.AR.hwbt_original (restore puts it back)
   unpack-all <data> <outDir> [--dds] [--png]  unpack + decompile everything (textures->PNG/TGA,
                                       texts->TXT, sounds->WAV, speech->OGG, other entries->.bin)
   decompile  <filesDir> <outDir> [--dds] [--png]  decompile an already unpacked folder
@@ -138,7 +141,8 @@ Archive:
   uninstall <data>                    revert and delete the backup
 
 Whole game (Data + lData):
-  install-mods   <gameDir> <modsRoot> apply every sub-folder of modsRoot as a mod
+  install-mods   <gameDir> <modsRoot> [--rebuild]  apply every sub-folder of modsRoot as a mod
+                                      (--rebuild: rebuild the archives instead of appending)
   make-template  <dir>                write an empty mod template (Data\ + lData\, decompile layout)
   uninstall-mods <gameDir>            revert both archives to original
 

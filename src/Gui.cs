@@ -19,13 +19,14 @@ namespace Hwbt
         [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
         public const string TechnyxUrl = "https://github.com/PredatorCZ/Technyx";
+        public const string ExperimentalUrl = "https://github.com/GammaAleph/hwbt-toolkit/wiki/Experimental";
         static readonly string ToolDir = Path.GetDirectoryName(Application.ExecutablePath);
         static readonly Color CreditGray = Color.FromArgb(85, 85, 85);
 
         TextBox gameBox, modsBox, logBox;
         CheckedListBox modList;
         ComboBox langBox;
-        CheckBox allPngBox, saveLogsBox;
+        CheckBox allPngBox, saveLogsBox, rebuildBox;
         StringBuilder logCapture; // output of the running install / restore job when "save log" is checked
         Label langLabel, gameLabel, modsLabel, cpStatus;
         GroupBox modGroup, cpGroup;
@@ -107,6 +108,14 @@ namespace Hwbt
             texts[saveLogsBox] = "chkSaveLogs";
             saveLogsBox.CheckedChanged += delegate { Lang.SaveLogs = saveLogsBox.Checked; Lang.Save(); };
             bar.Controls.Add(saveLogsBox);
+            rebuildBox = new CheckBox { AutoSize = true, Checked = Lang.Rebuild, Margin = new Padding(6, 7, 3, 3) };
+            texts[rebuildBox] = "chkRebuild";
+            rebuildBox.CheckedChanged += delegate { Lang.Rebuild = rebuildBox.Checked; Lang.Save(); };
+            bar.Controls.Add(rebuildBox);
+            // what is not fully tested yet (big textures, archives over 2 GB, replaced car models) - wiki page
+            var experimental = new LinkLabel { Text = "EXPERIMENTAL", AutoSize = true, Margin = new Padding(0, 8, 3, 3), LinkColor = Color.DarkOrange, ActiveLinkColor = Color.OrangeRed, VisitedLinkColor = Color.DarkOrange };
+            experimental.LinkClicked += delegate { try { Process.Start(ExperimentalUrl); } catch { } };
+            bar.Controls.Add(experimental);
             root.Controls.Add(bar);
 
             // community patch
@@ -268,12 +277,15 @@ namespace Hwbt
                 modList.CheckedItems.Cast<string>().Select(n => Path.Combine(modsBox.Text, n)).ToList()));
             string game = GameDir();
             if (selected.Count == 0) { Log(Lang.T("noModsChecked")); Archive.UninstallGame(game); return; }
+            bool rebuild = Lang.Rebuild;
+            if (rebuild) Log(Lang.T("rebuildInfo"));
             foreach (var d in Archive.GameDataDirs)
             {
                 string dir = Path.Combine(game, d);
                 if (!File.Exists(Archive.DatIn(dir))) continue;
                 Log("== " + d);
-                Archive.Patch(dir, selected);
+                if (rebuild) Archive.Repack(dir, selected);
+                else Archive.Patch(dir, selected);
             }
         }
 

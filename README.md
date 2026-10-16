@@ -37,7 +37,7 @@ This toolkit stands on the work of other people. If you enjoy it, please support
 
 ## Install
 
-1. Download `HWBT-Toolkit-v1.3.2.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
+1. Download `HWBT-Toolkit-v1.4.zip` from [Releases](https://github.com/GammaAleph/hwbt-toolkit/releases)
    and unzip it anywhere.
 2. Run `hwbt.exe`. The language selector is at the top of the window.
 
@@ -50,7 +50,7 @@ The toolkit requires .NET Framework 4.5 or later, which is built into Windows 8,
 | Install / uninstall mods       | installs every checked mod from `mods\` into `Data\` and `lData\`; unchecked mods are removed |
 | Restore original               | reverts both archives byte-for-byte                                  |
 | Unpack archive…                | extracts all 2,141 game files                                        |
-| Unpack and decompile…          | extracts everything and unpacks the files' contents: textures → PNG/TGA, fonts → PNG/TXT, texts → TXT, sounds → WAV, speech and music → OGG, all other `.ARC` entries → `.bin` + `index.txt` |
+| Unpack and decompile…          | extracts everything and unpacks the files' contents: textures → PNG/TGA, fonts → PNG/TXT, 3D models → OBJ (Blender), texts → TXT, sounds → WAV, speech and music → OGG, all other `.ARC` entries → `.bin` + `index.txt` |
 | Textures ARC → PNG/TGA…        | exports the textures of selected `.ARC` banks into `<BANK.ARC>\`     |
 | Fonts ARC → PNG/TXT…           | exports the fonts of selected `.ARC` banks into `<BANK.ARC>\<name>.font\` |
 | Sounds HDR → WAV/OGG…          | exports selected sound banks (`.wav`) and speech banks (`.ogg`) into `<BANK>.HDR\` |
@@ -58,6 +58,7 @@ The toolkit requires .NET Framework 4.5 or later, which is built into Windows 8,
 | Models ARC → OBJ…              | exports the 3D models of selected banks as `.obj` + `.mtl` + textures for Blender (cars assembled, `_LODX_GRA` banks as `_lod1.._lod3.obj`, tracks with every piece in place). Export only - models cannot be put back yet |
 | ☐ Convert all textures to PNG  | textures named `*.tga` in the game are exported as TGA unless this is checked |
 | ☐ Save a log file when installing / uninstalling mods | everything the console at the bottom shows from the click on **Install / uninstall mods** (or **Restore original**) until the job ends is saved to `logs\install-mods_<date>_<time>.log` next to `hwbt.exe` (or `%APPDATA%\HWBT-Toolkit\logs\` if that folder is read-only), with the game folder and the list of checked mods at the top. Handy for bug reports |
+| ☐ Rebuild the archive when installing | instead of appending mod files to the end of `ARCHIVE0.AR` (the replaced originals stay inside, unused), the archive is written anew **without** the replaced files, so it stays smaller. [**EXPERIMENTAL**](https://github.com/GammaAleph/hwbt-toolkit/wiki/Experimental). The original archive is kept as `ARCHIVE0.AR.hwbt_original`; **Restore original** puts it back byte-for-byte. Needs free disk space for one more archive (~1.4 GB `Data`, ~0.7 GB `lData`) |
 | Install Patch V1 / V2          | downloads the author's patch (SHA-256 verified) and runs its installer |
 | Remove patch                   | runs the author's restore script for the installed patch            |
 
@@ -167,6 +168,8 @@ hwbt hdr2wav <file.HDR> [out]                sound bank -> .wav
 hwbt make-soundbank <wavDir> <out.HDR> [template.HDR]     .wav -> new/updated sound bank
 hwbt make-speechbank <oggDir> <out.HDR> <template.HDR>    .ogg -> speech bank
 hwbt pack <Data> <modDir> <out>
+hwbt repack <Data> <modDir> [modDir2 ...]    rebuild in place, replaced files dropped (original kept as .hwbt_original)
+hwbt install-mods <GameDir> <mods> --rebuild same as the "Rebuild the archive" checkbox
 hwbt patch <Data> <modDir> [modDir2 ...]     hwbt restore | uninstall <Data>
 hwbt install-mods <GameDir> <mods>           hwbt uninstall-mods <GameDir>
 hwbt lda2txt <file.LDA|dir> [out]            hwbt txt2lda <file.txt> [out.LDA]
@@ -236,7 +239,7 @@ The code is plain C# 5, so it also builds with Visual Studio or MSBuild (target 
 
 * `lda0` text tables are 8-bit Windows-1252, so they have no Cyrillic. A translation would also require new fonts.
 * Models, physics and scripts inside `.ARC` files can only be replaced as whole files.
-* Keep the archive below 2 GB, because the engine most likely uses 32-bit offsets.
+* Archives larger than 2 GB, textures more than 2× the original resolution and replaced car models are not fully tested yet, see [**EXPERIMENTAL**](https://github.com/GammaAleph/hwbt-toolkit/wiki/Experimental).
 
 ## License
 

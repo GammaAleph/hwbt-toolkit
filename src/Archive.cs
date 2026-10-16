@@ -84,10 +84,20 @@ namespace Hwbt
             Dictionary<int, ModItem> mods;
             using (var src = OpenRead(srcAr)) mods = CollectMods(cd, src, new[] { modDir }, DataDirName(dataDir));
 
+            BuildArchive(cd, srcAr, dstAr, mods);
+            File.WriteAllBytes(DatIn(outDir), cd.Build());
+            Log(string.Format("Packed {0} files ({1} replaced) into {2}", cd.NumTotalFiles, mods.Count, outDir));
+        }
+
+        // Writes a complete new archive: every blob in its original order, mod items instead of the files they
+        // replace (the replaced originals are not kept). Updates cd's offsets/sizes; returns the archive length.
+        static long BuildArchive(CdFiles cd, string srcAr, string dstAr, Dictionary<int, ModItem> mods)
+        {
             var order = Enumerable.Range(0, (int)cd.NumTotalFiles).OrderBy(i => cd.FileOffsets[i]).ToList();
             var buf = new byte[1 << 20];
             uint[] newOff = new uint[cd.NumTotalFiles];
             uint[] newSize = new uint[cd.NumTotalFiles];
+            long length;
             using (var src = OpenRead(srcAr))
             using (var dst = new FileStream(dstAr, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16))
             {
@@ -106,12 +116,76 @@ namespace Hwbt
                     Pad(dst, cd.Alignment);
                     if (++done % 500 == 0) Log(string.Format("  {0}/{1} ...", done, order.Count));
                 }
-                CheckSize(dst.Length);
+                length = dst.Length;
+                CheckSize(length);
             }
             cd.FileOffsets = newOff;
             cd.FileSizes = newSize;
-            File.WriteAllBytes(DatIn(outDir), cd.Build());
-            Log(string.Format("Packed {0} files ({1} replaced) into {2}", order.Count, mods.Count, outDir));
+            return length;
+        }
+
+        // ---------- in-place rebuild ----------
+        // Like Patch, but the archive is written anew: replaced files are dropped instead of staying in the archive,
+        // so big texture mods take less room (the game most likely cannot read past 2 GB). The pristine archive is
+        // kept as ARCHIVE0.AR.hwbt_original (renamed, not copied) and Restore puts it back.
+        public static int Repack(string dataDir, IList<string> modDirs)
+        {
+            string dat = DatIn(dataDir);
+            EnsureBackup(dataDir);
+            Restore(dataDir, true);
+
+            var cd = CdFiles.Load(dat);
+            string arPath = OnDisk(cd.ArchiveFileIn(dataDir));
+            string origPath = arPath + OriginalArchiveSuffix;
+            Dictionary<int, ModItem> mods;
+            using (var ar = OpenRead(arPath)) mods = CollectMods(cd, ar, modDirs, DataDirName(dataDir));
+            if (mods.Count == 0) { Log("Nothing to install in " + dataDir); return 0; }
+
+            long origLen = new FileInfo(arPath).Length;
+            long replaced = mods.Keys.Sum(i => (long)cd.FileSizes[i]);
+            long need = origLen - replaced + mods.Values.Sum(m => m.Length + cd.Alignment) + (16L << 20);
+            var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(arPath)));
+            if (drive.AvailableFreeSpace < need)
+                throw new IOException(string.Format("Not enough disk space to rebuild {0}: need {1:N0} MB free, have {2:N0} MB " +
+                    "(the original archive is kept as a backup while the new one is written).", arPath, need >> 20, drive.AvailableFreeSpace >> 20));
+
+            Log("  rebuilding the archive (original kept as " + Path.GetFileName(origPath) + ") ...");
+            File.Move(arPath, origPath);
+            string tmp = arPath + ".hwbt_tmp";
+            long newLen;
+            try
+            {
+                newLen = BuildArchive(cd, origPath, tmp, mods);
+                File.Move(tmp, arPath);
+            }
+            catch
+            {
+                // put the original back so the game keeps working
+                if (File.Exists(tmp)) File.Delete(tmp);
+                if (!File.Exists(arPath)) File.Move(origPath, arPath);
+                throw;
+            }
+            File.WriteAllBytes(dat, cd.Build());
+            Log(string.Format("Rebuilt {0} with {1} replaced file(s)", dataDir, mods.Count));
+            ReportSize(newLen, origLen);
+            return mods.Count;
+        }
+
+        public const string OriginalArchiveSuffix = ".hwbt_original";
+
+        // The file as it is spelled on disk (CDFILES.DAT says ARCHIVE0.AR, the retail file is archive0.ar),
+        // so renaming it back and forth keeps the original name.
+        static string OnDisk(string path)
+        {
+            string dir = Path.GetDirectoryName(path), name = Path.GetFileName(path);
+            if (!Directory.Exists(dir)) return path;
+            return Directory.GetFiles(dir, name).FirstOrDefault(f => Path.GetFileName(f).Equals(name, StringComparison.OrdinalIgnoreCase)) ?? path;
+        }
+
+        static void ReportSize(long len, long origLen)
+        {
+            Log(string.Format("  archive: {0:N0} MB (original {1:N0} MB, {2:+#,0;-#,0;0} MB)",
+                len >> 20, origLen >> 20, (len - origLen) >> 20));
         }
 
         // ---------- in-place patch ----------
@@ -130,8 +204,10 @@ namespace Hwbt
             if (mods.Count == 0) { Log("Nothing to patch in " + dataDir); return 0; }
 
             var buf = new byte[1 << 20];
+            long origLen, newLen;
             using (var ar = new FileStream(arPath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read, 1 << 16))
             {
+                origLen = ar.Length;
                 ar.Position = ar.Length;
                 Pad(ar, cd.Alignment);
                 foreach (var m in mods.Values.OrderBy(x => x.DataIndex))
@@ -140,15 +216,17 @@ namespace Hwbt
                     cd.FileSizes[m.DataIndex] = WriteMod(m, ar, buf);
                     Pad(ar, cd.Alignment);
                 }
-                CheckSize(ar.Length);
+                newLen = ar.Length;
+                CheckSize(newLen);
             }
             File.WriteAllBytes(dat, cd.Build());
             Log(string.Format("Patched {0} file(s) in {1}", mods.Count, dataDir));
+            ReportSize(newLen, origLen);
             return mods.Count;
         }
 
         // Applies every sub-folder of modsRoot (alphabetical order, later wins) to Data\ and lData\.
-        public static void InstallGame(string gameDir, string modsRoot)
+        public static void InstallGame(string gameDir, string modsRoot, bool rebuild = false)
         {
             var modDirs = ModFolders(modsRoot);
             if (modDirs.Count == 0) Log("No mod folders found in " + modsRoot + " - restoring original data.");
@@ -159,6 +237,7 @@ namespace Hwbt
                 if (!File.Exists(DatIn(dir))) continue;
                 Log("== " + dir);
                 if (modDirs.Count == 0) Restore(dir, false);
+                else if (rebuild) Repack(dir, modDirs);
                 else Patch(dir, modDirs);
             }
         }
@@ -209,11 +288,21 @@ namespace Hwbt
 
             var cd = CdFiles.Load(bdat);
             string arPath = cd.ArchiveFileIn(dataDir);
-            using (var ar = new FileStream(arPath, FileMode.Open, FileAccess.Write))
+            string origPath = OnDisk(arPath + OriginalArchiveSuffix);
+            if (File.Exists(origPath))
             {
-                if (ar.Length < len) throw new InvalidDataException("Archive is shorter than at backup time - was it replaced?");
-                ar.SetLength(len);
+                // rebuilt archive (Repack): put the untouched original back, under its original name
+                if (new FileInfo(origPath).Length != len)
+                    throw new InvalidDataException("The backup " + origPath + " does not have the recorded size - not restoring automatically.");
+                if (File.Exists(arPath)) File.Delete(arPath);
+                File.Move(origPath, origPath.Substring(0, origPath.Length - OriginalArchiveSuffix.Length));
             }
+            else
+                using (var ar = new FileStream(arPath, FileMode.Open, FileAccess.Write))
+                {
+                    if (ar.Length < len) throw new InvalidDataException("Archive is shorter than at backup time - was it replaced?");
+                    ar.SetLength(len);
+                }
             File.Copy(bdat, DatIn(dataDir), true);
             if (!quiet) Log("Restored original archive in " + dataDir);
             return true;
@@ -552,7 +641,8 @@ namespace Hwbt
         static void CheckSize(long len)
         {
             if (len > MaxSafeArchiveSize)
-                Log("WARNING: archive is larger than 2 GB - the game may fail to read files past that point.");
+                Log("WARNING: archive is larger than 2 GB - not fully tested yet. If the game crashes, try \"Rebuild the archive when installing\"" +
+                    " (see the wiki page Experimental: https://github.com/GammaAleph/hwbt-toolkit/wiki/Experimental).");
         }
     }
 }

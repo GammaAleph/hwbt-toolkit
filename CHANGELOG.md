@@ -1,18 +1,24 @@
 # Changelog
 
-## v1.3.2-models (local fork)
-* **3D model export.** New button **Models ARC → OBJ…** and CLI `model-export <file.ARC|folder> <outDir> [--png]`:
-  every bank with models becomes `<BANK>.obj` + `<BANK>.mtl` + the diffuse textures, ready for Blender
-  (File > Import > Wavefront). Node transforms are baked in, so cars come out assembled (body + 4 wheels) and
-  tracks with every piece in place. Cars' `_LODX_GRA` banks give one file per level of detail
-  (`_lod1/_lod2/_lod3.obj`); the damage parts (`Front-MORPH` ...) are separate objects.
-* The geometry layout is the one documented by Technyx (Street Racing Syndicate); Technyx's own `arc_extract`
-  stops on Hot Wheels banks because their materials differ ("bad allocation"). The material layout used here:
-  13 u32 header, `{id, size, data}` parameters, then texture slots `{u16 type, u16 count, {texture, u32, u32}}`.
-* Tested on all 1820 PC banks: 110 contain models, all export without errors (cars, tracks, menu scenes).
-* **Unpack and decompile** now writes the models too: `decompiled\arc\<BANK.ARC>\models\<BANK>.obj` (+ `_lodN.obj`)
-  and `.mtl`, which points at the bank's `..\textures\` instead of copying them (7,351 models in 110 banks, all
-  5,451 texture references resolve).
+## v1.4
+* **3D models.** *Unpack and decompile* now also exports the game's 3D models:
+  `decompiled\arc\<BANK.ARC>\models\<BANK>.obj` + `.mtl`, using the textures in `..\textures\`. Open them in
+  Blender with *File > Import > Wavefront (.obj)*. Cars come out assembled (body + 4 wheels); the cars' `_LODX_GRA`
+  banks give one file per level of detail (`_lod1`, `_lod2`, `_lod3`), the damage parts (`Front-MORPH` ...) are
+  separate objects; tracks come with every piece in place. New button **Models ARC → OBJ…** and CLI
+  `model-export <file.ARC|folder> <outDir> [--png]` for single banks. Export only: models cannot be put back yet.
+  Tested on all 1,820 PC banks: 110 contain models (7,351 models), all export without errors.
+* The geometry layout is the one documented by [Technyx](https://github.com/PredatorCZ/Technyx) for Street Racing
+  Syndicate. Technyx's own `arc_extract` stops on Hot Wheels banks because their materials differ; the toolkit reads
+  them itself (13 u32 header, `{id, size, data}` parameters, texture slots).
+* **Rebuild the archive when installing** *(experimental)*. Normally a mod install appends the new files to the end
+  of `ARCHIVE0.AR` and the replaced originals stay inside, unused. With the checkbox ticked the archive is written
+  anew without the replaced files, so it stays smaller. The untouched original is kept as `ARCHIVE0.AR.hwbt_original`
+  (renamed, no extra copy time); **Restore original** puts it back byte-for-byte. Needs free disk space for one more
+  archive (about 1.4 GB for `Data`, 0.7 GB for `lData`). See the wiki page
+  [Experimental](https://github.com/GammaAleph/hwbt-toolkit/wiki/Experimental) for what is not fully tested yet.
+* Every install now reports the archive size and its change against the original.
+* CLI: `repack <data> <modDir>...` and `install-mods <gameDir> <modsRoot> --rebuild`.
 
 ## v1.3.2
 * New checkbox **Save a log file when installing / uninstalling mods**. When it is checked, everything the console
