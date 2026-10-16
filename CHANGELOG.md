@@ -10,6 +10,9 @@
   stops on Hot Wheels banks because their materials differ ("bad allocation"). The material layout used here:
   13 u32 header, `{id, size, data}` parameters, then texture slots `{u16 type, u16 count, {texture, u32, u32}}`.
 * Tested on all 1820 PC banks: 110 contain models, all export without errors (cars, tracks, menu scenes).
+* **Unpack and decompile** now writes the models too: `decompiled\arc\<BANK.ARC>\models\<BANK>.obj` (+ `_lodN.obj`)
+  and `.mtl`, which points at the bank's `..\textures\` instead of copying them (7,351 models in 110 banks, all
+  5,451 texture references resolve).
 
 ## v1.3.2
 * New checkbox **Save a log file when installing / uninstalling mods**. When it is checked, everything the console

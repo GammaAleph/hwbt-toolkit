@@ -1,7 +1,7 @@
 // "Unpack & decompile": extracts the archive and then unpacks everything inside the extracted files
 // into readable formats:
 //   files\                         raw archive files (same as "unpack")
-//   decompiled\arc\<BANK.ARC>\     every arcbank entry: textures\*.png (+ .dds), entries\*.bin, index.txt
+//   decompiled\arc\<BANK.ARC>\     every arcbank entry: textures\*.png (+ .dds), models\*.obj, entries\*.bin, index.txt
 //   decompiled\texts\*.txt         .LDA string tables
 //   decompiled\sounds\<BANK>\*.wav .HDR/.RAW sound banks
 //   decompiled\speech\<BANK>\*.ogg .HDR/.SPD speech banks
@@ -28,7 +28,7 @@ namespace Hwbt
         public static void DecompileFolder(string filesDir, string outDir, bool dds, bool allPng)
         {
             Directory.CreateDirectory(outDir);
-            int texts = 0, sounds = 0, banks = 0, textures = 0, entries = 0, fontCount = 0, errors = 0;
+            int texts = 0, sounds = 0, banks = 0, textures = 0, entries = 0, fontCount = 0, errors = 0, models = 0, modelBanks = 0;
 
             // texts
             foreach (var f in Directory.GetFiles(filesDir, "*.LDA"))
@@ -76,16 +76,26 @@ namespace Hwbt
                 try
                 {
                     int t, e, fn;
-                    DecompileBank(File.ReadAllBytes(f), Path.Combine(outDir, "arc", Path.GetFileName(f)), dds, allPng, out t, out e, out fn);
+                    byte[] arc = File.ReadAllBytes(f);
+                    string bankDir = Path.Combine(outDir, "arc", Path.GetFileName(f));
+                    DecompileBank(arc, bankDir, dds, allPng, out t, out e, out fn);
                     Interlocked.Add(ref textures, t);
                     Interlocked.Add(ref entries, e);
                     Interlocked.Add(ref fontCount, fn);
+                    // 3D models -> models\<BANK>.obj (+ _lodN.obj) + .mtl, using the textures written above
+                    try
+                    {
+                        var m = ArcModels.ExportObj(arc, Path.Combine(bankDir, "models"), Path.GetFileNameWithoutExtension(f), allPng, "../textures");
+                        if (m != null) { Interlocked.Add(ref models, m.Models); Interlocked.Increment(ref modelBanks); }
+                    }
+                    catch (Exception ex) { Interlocked.Increment(ref errors); Archive.Log("  ! " + Path.GetFileName(f) + " (models): " + ex.Message); }
                 }
                 catch (Exception ex) { Interlocked.Increment(ref errors); Archive.Log("  ! " + Path.GetFileName(f) + ": " + ex.Message); }
                 int n = Interlocked.Increment(ref banks);
                 if (n % 100 == 0) Archive.Log(string.Format("  banks {0}/{1} ...", n, arcs.Length));
             });
-            Archive.Log(string.Format("Arcbanks: {0} ({1} textures, {2} fonts, {3} other entries)", banks, textures, fontCount, entries));
+            Archive.Log(string.Format("Arcbanks: {0} ({1} textures, {2} fonts, {3} models in {4} bank(s), {5} other entries)",
+                banks, textures, fontCount, models, modelBanks, entries));
 
             File.WriteAllText(Path.Combine(outDir, "README.txt"), Readme(), Encoding.UTF8);
             Archive.Log(string.Format("Decompiled into {0}{1}", outDir, errors > 0 ? " - " + errors + " error(s), see log" : ""));
@@ -208,6 +218,8 @@ arc\<BANK.ARC>\textures\     textures as PNG/TGA (and DDS if requested); to mod 
                              and mip count shown in index.txt
 arc\<BANK.ARC>\fonts\<FONT>.font\   bitmap fonts: font.txt (glyphs, char codes, spacing) + atlas.png;
                              to mod: mods\<YourMod>\<BANK.ARC>\<FONT>.font\ (edited font.txt and/or atlas)
+arc\<BANK.ARC>\models\       3D models as <BANK>.obj + .mtl (textures from ..\textures\) - open in Blender with
+                             File > Import > Wavefront; cars' _LODX_GRA banks give <BANK>_lod1.._lod3.obj (export only)
 arc\<BANK.ARC>\entries\      all other entries as raw binary (models, meshes, vertex/index buffers, materials,
                              animations, plain data ...); their internal formats are only partially documented
 

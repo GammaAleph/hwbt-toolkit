@@ -42,7 +42,9 @@ namespace Hwbt
         }
 
         // Writes <outDir>\<baseName>.obj + .mtl and the textures the materials use. Returns null if the bank has no models.
-        public static Result ExportObj(byte[] arc, string outDir, string baseName, bool allPng)
+        // sharedTextures: relative folder (e.g. "../textures") where the bank's textures already are (Unpack and decompile);
+        // the .mtl then points there instead of writing copies.
+        public static Result ExportObj(byte[] arc, string outDir, string baseName, bool allPng, string sharedTextures = null)
         {
             var b = ArcBank.Parse(arc);   // PC (ARCC) banks only
             if (!HasModels(b)) return null;
@@ -96,10 +98,14 @@ namespace Hwbt
                 file += ArcTools.ImageExtFor(textures[tex], allPng);
                 if (written.Add(file))
                 {
-                    try { ArcTools.SaveImage(b.GetData(textures[tex]), Path.Combine(outDir, file)); res.Textures++; }
-                    catch (Exception ex) { Archive.Log("  ! " + file + ": " + ex.Message); continue; }
+                    if (sharedTextures != null) res.Textures++;
+                    else
+                    {
+                        try { ArcTools.SaveImage(b.GetData(textures[tex]), Path.Combine(outDir, file)); res.Textures++; }
+                        catch (Exception ex) { Archive.Log("  ! " + file + ": " + ex.Message); continue; }
+                    }
                 }
-                mtl.AppendFormat("map_Kd {0}\r\n", file);
+                mtl.AppendFormat("map_Kd {0}\r\n", sharedTextures != null ? sharedTextures + "/" + file : file);
             }
             File.WriteAllText(Path.Combine(outDir, baseName + ".mtl"), mtl.ToString(), new UTF8Encoding(false));
 

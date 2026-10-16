@@ -34,8 +34,8 @@ namespace Hwbt
             { "askDecompileDir", new[] { "Where to unpack and decompile? (Data and lData sub-folders will be created)",
                                          "Куда распаковать и декомпилировать? (будут созданы подпапки Data и lData)" } },
             { "decompileInfo", new[] {
-                "Full unpack: raw files -> files\\, textures -> PNG/TGA, fonts -> PNG/TXT, texts -> TXT, sounds -> WAV, speech and music -> OGG, other bank entries -> .bin (needs ~4 GB, takes several minutes)…",
-                "Полная распаковка: файлы -> files\\, текстуры -> PNG/TGA, шрифты -> PNG/TXT, тексты -> TXT, звуки -> WAV, речь и музыка -> OGG, прочие записи банков -> .bin (нужно ~4 ГБ, займёт несколько минут)…" } },
+                "Full unpack: raw files -> files\\, textures -> PNG/TGA, fonts -> PNG/TXT, 3D models -> OBJ, texts -> TXT, sounds -> WAV, speech and music -> OGG, other bank entries -> .bin (needs ~6 GB, takes several minutes)…",
+                "Полная распаковка: файлы -> files\\, текстуры -> PNG/TGA, шрифты -> PNG/TXT, 3D-модели -> OBJ, тексты -> TXT, звуки -> WAV, речь и музыка -> OGG, прочие записи банков -> .bin (нужно ~6 ГБ, займёт несколько минут)…" } },
             { "pickHdr", new[] { "Select sound banks (.HDR from the unpacked archive; .RAW/.SPD must be next to them)",
                                  "Выберите звуковые банки (.HDR из распакованного архива; рядом должны лежать .RAW/.SPD)" } },
             { "askSoundDir", new[] { "Where to save the sounds?", "Куда сохранить звуки?" } },
